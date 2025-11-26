@@ -14,7 +14,7 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
       return;
     }
 
-    if (!authService.isMitra()) {
+    if (!authService.isMitraOrAdmin()) {
       router.push('/');
       return;
     }

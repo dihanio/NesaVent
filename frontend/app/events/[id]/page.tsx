@@ -144,9 +144,11 @@ export default function EventDetailPage() {
       return;
     }
 
-    // Check if user is mitra - they cannot purchase tickets
-    if (authService.isMitra()) {
-      setError('Akun mitra tidak dapat membeli tiket. Silakan gunakan akun regular untuk pembelian.');
+    // Check if user is mitra or admin - they cannot purchase tickets
+    if (authService.isMitraOrAdmin()) {
+      const currentUser = authService.getCurrentUser();
+      const roleText = currentUser?.role === 'mitra' ? 'mitra' : 'admin';
+      setError(`Akun ${roleText} tidak dapat membeli tiket. Silakan gunakan akun regular untuk pembelian.`);
       return;
     }
 
@@ -472,7 +474,7 @@ export default function EventDetailPage() {
                   )}
 
                   {/* Info: Mitra cannot purchase */}
-                  {authService.isAuthenticated() && authService.isMitra() && (
+                  {authService.isAuthenticated() && authService.isMitraOrAdmin() && (
                     <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-lg mb-4">
                       <div className="flex items-start gap-2">
                         <svg className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
@@ -480,7 +482,7 @@ export default function EventDetailPage() {
                         </svg>
                         <div className="text-sm text-orange-800">
                           <p className="font-semibold mb-1">Pembelian Tidak Diperbolehkan</p>
-                          <p>Akun mitra tidak dapat membeli tiket. Fitur ini hanya untuk pengguna regular.</p>
+                          <p>Akun {authService.getCurrentUser()?.role === 'mitra' ? 'mitra' : 'admin'} tidak dapat membeli tiket. Fitur ini hanya untuk pengguna regular.</p>
                         </div>
                       </div>
                     </div>
@@ -511,7 +513,7 @@ export default function EventDetailPage() {
 
                   <button
                     type="submit"
-                    disabled={submitting || getTotalQuantity() === 0 || (authService.isAuthenticated() && authService.isMitra())}
+                    disabled={submitting || getTotalQuantity() === 0 || (authService.isAuthenticated() && authService.isMitraOrAdmin())}
                     className="w-full bg-linear-to-r from-blue-600 to-blue-700 text-white py-4 rounded-xl hover:from-blue-700 hover:to-blue-800 transition disabled:opacity-50 disabled:cursor-not-allowed font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none"
                   >
                     {submitting ? (
@@ -524,8 +526,8 @@ export default function EventDetailPage() {
                       </span>
                     ) : getTotalQuantity() === 0 ? (
                       '❌ Pilih Tiket'
-                    ) : authService.isAuthenticated() && authService.isMitra() ? (
-                      '🚫 Mitra Tidak Dapat Membeli'
+                    ) : authService.isAuthenticated() && authService.isMitraOrAdmin() ? (
+                      `🚫 ${authService.getCurrentUser()?.role === 'mitra' ? 'Mitra' : 'Admin'} Tidak Dapat Membeli`
                     ) : authService.isAuthenticated() ? (
                       '🎫 Lanjutkan Pembayaran'
                     ) : (

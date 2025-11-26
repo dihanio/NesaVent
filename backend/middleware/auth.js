@@ -48,4 +48,13 @@ const protectAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { protect, protectMitra, protectAdmin };
+// Middleware untuk user biasa saja
+const protectUser = async (req, res, next) => {
+  if (req.user && req.user.role === 'user') {
+    next();
+  } else {
+    res.status(403).json({ message: 'Akses ditolak. Hanya untuk user biasa.' });
+  }
+};
+
+module.exports = { protect, protectMitra, protectAdmin, protectUser };

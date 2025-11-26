@@ -80,9 +80,11 @@ export default function CheckoutPage() {
       return;
     }
 
-    // Check if user is mitra - they cannot buy tickets
-    if (authService.isMitra()) {
-      alert('Akun mitra tidak dapat membeli tiket. Silakan gunakan akun regular untuk pembelian tiket.');
+    // Check if user is mitra or admin - they cannot buy tickets
+    if (authService.isMitraOrAdmin()) {
+      const currentUser = authService.getCurrentUser();
+      const roleText = currentUser?.role === 'mitra' ? 'mitra' : 'admin';
+      alert(`Akun ${roleText} tidak dapat membeli tiket. Silakan gunakan akun regular untuk pembelian tiket.`);
       router.push('/');
       return;
     }

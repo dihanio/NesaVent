@@ -35,14 +35,15 @@ const createOrder = async (req, res) => {
   try {
     const {
       eventId,
-      jumlahTiket,
+      ticketSelections, // New format: array of { ticketTypeId, quantity }
+      jumlahTiket, // Legacy support
       namaPembeli,
       emailPembeli,
       nomorTelepon,
-      ticketTypeId,
+      ticketTypeId, // Legacy support
     } = req.body;
 
-    console.log('Create order request:', { eventId, jumlahTiket, ticketTypeId });
+    console.log('Create order request:', { eventId, ticketSelections, ticketTypeId, jumlahTiket });
 
     // Cek event
     const event = await Event.findById(eventId);
@@ -51,89 +52,150 @@ const createOrder = async (req, res) => {
       return res.status(404).json({ message: 'Event tidak ditemukan' });
     }
 
-    let hargaSatuan;
-    let ticketType = null;
+    let totalHarga = 0;
     let items = [];
+    let totalQuantity = 0;
 
-    // Jika ada multiple ticket types
-    if (event.tiketTersedia && event.tiketTersedia.length > 0) {
-      if (!ticketTypeId) {
-        return res.status(400).json({ message: 'Silakan pilih tipe tiket' });
-      }
+    // Handle new format with ticketSelections
+    if (ticketSelections && Array.isArray(ticketSelections) && ticketSelections.length > 0) {
+      for (const selection of ticketSelections) {
+        const { ticketTypeId, quantity } = selection;
+        
+        if (!ticketTypeId || !quantity || quantity <= 0) {
+          return res.status(400).json({ message: 'Data tiket tidak valid' });
+        }
 
-      ticketType = event.tiketTersedia.id(ticketTypeId);
-      
-      if (!ticketType) {
-        return res.status(404).json({ message: 'Tipe tiket tidak ditemukan' });
-      }
+        const ticketType = event.tiketTersedia.id(ticketTypeId);
+        
+        if (!ticketType) {
+          return res.status(404).json({ message: 'Tipe tiket tidak ditemukan' });
+        }
 
-      // Cek periode penjualan
-      const now = new Date();
-      if (ticketType.mulaiJual && new Date(ticketType.mulaiJual) > now) {
-        return res.status(400).json({ message: 'Penjualan tiket belum dimulai' });
-      }
-      if (ticketType.akhirJual && new Date(ticketType.akhirJual) < now) {
-        return res.status(400).json({ message: 'Penjualan tiket sudah berakhir' });
-      }
+        // Cek periode penjualan
+        const now = new Date();
+        if (ticketType.mulaiJual && new Date(ticketType.mulaiJual) > now) {
+          return res.status(400).json({ message: 'Penjualan tiket belum dimulai' });
+        }
+        if (ticketType.akhirJual && new Date(ticketType.akhirJual) < now) {
+          return res.status(400).json({ message: 'Penjualan tiket sudah berakhir' });
+        }
 
-      // Cek stok tiket tipe ini
-      if (ticketType.stokTersisa < jumlahTiket) {
-        return res.status(400).json({ message: 'Stok tiket tidak mencukupi' });
-      }
+        // Cek stok tiket tipe ini
+        if (ticketType.stokTersisa < quantity) {
+          return res.status(400).json({ message: `Stok tiket ${ticketType.nama} tidak mencukupi` });
+        }
 
-      // Cek maksimal pembelian per orang
-      if (ticketType.maxPembelianPerOrang) {
-        const existingOrders = await Order.find({
-          user: req.user._id,
-          event: eventId,
-          'items.tipeTiket': ticketTypeId,
-          status: { $in: ['pending', 'paid'] }
+        // Cek maksimal pembelian per orang
+        if (ticketType.maxPembelianPerOrang) {
+          const existingOrders = await Order.find({
+            user: req.user._id,
+            event: eventId,
+            'items.tipeTiket': ticketTypeId,
+            status: { $in: ['pending', 'paid'] }
+          });
+
+          const totalPurchased = existingOrders.reduce((sum, order) => {
+            const item = order.items.find(i => i.tipeTiket.toString() === ticketTypeId);
+            return sum + (item ? item.jumlah : 0);
+          }, 0);
+          
+          if (totalPurchased + quantity > ticketType.maxPembelianPerOrang) {
+            return res.status(400).json({ 
+              message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket ${ticketType.nama} per orang. Anda sudah membeli ${totalPurchased} tiket.` 
+            });
+          }
+        }
+
+        // Buat item untuk order
+        items.push({
+          tipeTiket: ticketType._id,
+          namaTipe: ticketType.nama,
+          hargaSatuan: ticketType.harga,
+          jumlah: quantity,
+          subtotal: ticketType.harga * quantity
         });
 
-        const totalPurchased = existingOrders.reduce((sum, order) => {
-          const item = order.items.find(i => i.tipeTiket.toString() === ticketTypeId);
-          return sum + (item ? item.jumlah : 0);
-        }, 0);
-        
-        if (totalPurchased + jumlahTiket > ticketType.maxPembelianPerOrang) {
-          return res.status(400).json({ 
-            message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket per orang. Anda sudah membeli ${totalPurchased} tiket.` 
-          });
-        }
+        totalHarga += ticketType.harga * quantity;
+        totalQuantity += quantity;
+      }
+    } else {
+      // Legacy support for single ticket type
+      if (!ticketTypeId && !jumlahTiket) {
+        return res.status(400).json({ message: 'Silakan pilih tipe tiket atau jumlah tiket' });
       }
 
-      hargaSatuan = ticketType.harga;
-      
-      // Buat item untuk order
-      items = [{
-        tipeTiket: ticketType._id,
-        namaTipe: ticketType.nama,
-        hargaSatuan: ticketType.harga,
-        jumlah: jumlahTiket,
-        subtotal: ticketType.harga * jumlahTiket
-      }];
-    } else {
-      // Legacy: single ticket type
-      if (event.stok < jumlahTiket) {
-        return res.status(400).json({ message: 'Stok tiket tidak mencukupi' });
+      if (ticketTypeId) {
+        // Single ticket type (legacy)
+        const ticketType = event.tiketTersedia.id(ticketTypeId);
+        
+        if (!ticketType) {
+          return res.status(404).json({ message: 'Tipe tiket tidak ditemukan' });
+        }
+
+        // Cek periode penjualan
+        const now = new Date();
+        if (ticketType.mulaiJual && new Date(ticketType.mulaiJual) > now) {
+          return res.status(400).json({ message: 'Penjualan tiket belum dimulai' });
+        }
+        if (ticketType.akhirJual && new Date(ticketType.akhirJual) < now) {
+          return res.status(400).json({ message: 'Penjualan tiket sudah berakhir' });
+        }
+
+        // Cek stok tiket tipe ini
+        if (ticketType.stokTersisa < jumlahTiket) {
+          return res.status(400).json({ message: 'Stok tiket tidak mencukupi' });
+        }
+
+        // Cek maksimal pembelian per orang
+        if (ticketType.maxPembelianPerOrang) {
+          const existingOrders = await Order.find({
+            user: req.user._id,
+            event: eventId,
+            'items.tipeTiket': ticketTypeId,
+            status: { $in: ['pending', 'paid'] }
+          });
+
+          const totalPurchased = existingOrders.reduce((sum, order) => {
+            const item = order.items.find(i => i.tipeTiket.toString() === ticketTypeId);
+            return sum + (item ? item.jumlah : 0);
+          }, 0);
+          
+          if (totalPurchased + jumlahTiket > ticketType.maxPembelianPerOrang) {
+            return res.status(400).json({ 
+              message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket per orang. Anda sudah membeli ${totalPurchased} tiket.` 
+            });
+          }
+        }
+
+        totalHarga = ticketType.harga * jumlahTiket;
+        totalQuantity = jumlahTiket;
+
+        // Buat item untuk order
+        items = [{
+          tipeTiket: ticketType._id,
+          namaTipe: ticketType.nama,
+          hargaSatuan: ticketType.harga,
+          jumlah: jumlahTiket,
+          subtotal: ticketType.harga * jumlahTiket
+        }];
+      } else {
+        // Legacy: single ticket type without ticketTypeId
+        if (event.stok < jumlahTiket) {
+          return res.status(400).json({ message: 'Stok tiket tidak mencukupi' });
+        }
+        totalHarga = event.harga || 0 * jumlahTiket;
+        totalQuantity = jumlahTiket;
       }
-      hargaSatuan = event.harga || 0;
     }
 
-    // Hitung total harga
-    const totalHarga = hargaSatuan * jumlahTiket;
-
-    console.log('Order calculation:', { hargaSatuan, jumlahTiket, totalHarga, hasItems: items.length > 0 });
+    console.log('Order calculation:', { totalHarga, totalQuantity, hasItems: items.length > 0 });
 
     // Buat order
     const orderData = {
       user: req.user._id,
       event: eventId,
-      jumlahTiket, // Legacy field
+      jumlahTiket: totalQuantity, // Legacy field
       totalHarga,
-      namaPembeli,
-      emailPembeli,
-      nomorTelepon,
     };
 
     // Tambahkan items jika ada

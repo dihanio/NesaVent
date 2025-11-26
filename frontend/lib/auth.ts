@@ -90,9 +90,15 @@ export const authService = {
   },
 
   // Check if user is mitra or admin
-  isMitra: (): boolean => {
+  isMitraOrAdmin: (): boolean => {
     const user = authService.getCurrentUser();
     return user ? (user.role === 'mitra' || user.role === 'admin') : false;
+  },
+
+  // Check if user is mitra
+  isMitra: (): boolean => {
+    const user = authService.getCurrentUser();
+    return user ? user.role === 'mitra' : false;
   },
 
   // Check if user is admin

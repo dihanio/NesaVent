@@ -98,6 +98,71 @@ router.delete('/events/:id', protect, protectAdmin, async (req, res) => {
   }
 });
 
+// @desc    Get dashboard statistics (admin/mitra)
+// @route   GET /api/admin/dashboard
+// @access  Private/Admin or Mitra
+router.get('/dashboard', protect, async (req, res) => {
+  try {
+    if (req.user.role === 'admin') {
+      // Admin dashboard - show global stats
+      const totalUsers = await User.countDocuments();
+      const totalMitra = await User.countDocuments({ role: 'mitra' });
+      const totalEvents = await Event.countDocuments();
+      const totalOrders = await Order.countDocuments();
+      const totalRevenue = await Order.aggregate([
+        { $match: { status: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$totalHarga' } } },
+      ]);
+
+      res.json({
+        totalUsers,
+        totalEvents,
+        activeEvents: await Event.countDocuments({ status: 'aktif' }),
+        totalTicketsSold: totalOrders, // Approximation
+        totalRevenue: totalRevenue[0]?.total || 0,
+        totalOrders,
+        pendingOrders: await Order.countDocuments({ status: 'pending' }),
+        pendingEvents: await Event.countDocuments({ status: 'pending' }),
+        activeMitra: totalMitra,
+        newUsersThisMonth: await User.countDocuments({
+          createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+        }),
+        rejectedEvents: await Event.countDocuments({ status: 'ditolak' }),
+      });
+    } else if (req.user.role === 'mitra') {
+      // Mitra dashboard - show partner's events and stats
+      const partnerEvents = await Event.find({ createdBy: req.user._id });
+      const totalEvents = partnerEvents.length;
+      const activeEvents = partnerEvents.filter(e => e.status === 'aktif').length;
+      const totalTicketsSold = await Order.countDocuments({
+        event: { $in: partnerEvents.map(e => e._id) },
+        status: 'paid'
+      });
+      const totalRevenue = await Order.aggregate([
+        { $match: { event: { $in: partnerEvents.map(e => e._id) }, status: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$totalHarga' } } },
+      ]);
+      const totalOrders = await Order.countDocuments({
+        event: { $in: partnerEvents.map(e => e._id) }
+      });
+      const pendingEvents = partnerEvents.filter(e => e.status === 'pending').length;
+
+      res.json({
+        totalEvents,
+        activeEvents,
+        totalTicketsSold,
+        totalRevenue: totalRevenue[0]?.total || 0,
+        totalOrders,
+        pendingEvents,
+      });
+    } else {
+      return res.status(403).json({ message: 'Akses ditolak' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 // @desc    Get dashboard statistics (admin only)
 // @route   GET /api/admin/stats
 // @access  Private/Admin
