@@ -19,6 +19,10 @@ Platform penjualan tiket event modern dengan sistem role-based authentication, d
 - 📧 **Email Notifications**: Notifikasi otomatis untuk berbagai aktivitas
 - 🔍 **Advanced Filtering**: Filter dan sorting event berdasarkan status, kategori, dll
 - 🛡️ **Event Validation**: Sistem validasi otomatis untuk mencegah event dummy
+- 🔑 **Password Recovery**: Forgot password dengan email verification
+- 🛒 **Complete Checkout Flow**: Sistem checkout lengkap dengan detail pembeli
+- 👤 **Mitra Profiles**: Halaman profil mitra dengan informasi lengkap
+- 📊 **Analytics Dashboard**: Dashboard analitik untuk mitra dan admin
 
 ---
 
@@ -29,6 +33,7 @@ Platform penjualan tiket event modern dengan sistem role-based authentication, d
 - Node.js 18+
 - MongoDB (local atau cloud)
 - Git
+- Mailpit (untuk email testing) - opsional
 
 ### Installation
 
@@ -55,9 +60,14 @@ Platform penjualan tiket event modern dengan sistem role-based authentication, d
    npm run dev          # Start development server on port 3000
    ```
 
-4. **Access Application**
+4. **Setup Email (Opsional)**
+   - Install Mailpit untuk testing email: https://mailpit.axllent.org/
+   - Atau gunakan SMTP Gmail untuk production
+
+5. **Access Application**
    - **Frontend**: http://localhost:3000
    - **Backend API**: http://localhost:5000/api
+   - **Mailpit Web Interface**: http://localhost:8025 (jika menggunakan Mailpit)
    - **Admin Dashboard**: Login as admin → navigate to dashboard
    - **Mitra Dashboard**: Login as mitra → navigate to dashboard
 
@@ -81,7 +91,7 @@ nesavent/
 │   │   │   ├── admin-orders/   # Admin: Order management
 │   │   │   ├── events/         # Mitra: Event management
 │   │   │   │   ├── create/
-│   │   │   │   ├── edit/
+│   │   │   │   ├── edit/[slug]/
 │   │   │   │   └── analytics/
 │   │   │   ├── notifications/
 │   │   │   ├── orders/
@@ -89,7 +99,10 @@ nesavent/
 │   │   │   ├── settings/
 │   │   │   └── withdrawals/
 │   │   ├── events/             # Public event pages
-│   │   ├── checkout/
+│   │   │   ├── page.tsx        # Event listing
+│   │   │   └── [slug]/         # Event detail with slug
+│   │   ├── checkout/[id]/      # Checkout page with order ID
+│   │   ├── mitra/[slug]/       # Mitra profile pages
 │   │   ├── my-orders/
 │   │   ├── my-tickets/
 │   │   ├── layout.tsx
@@ -99,10 +112,13 @@ nesavent/
 │   │   ├── DashboardLayout.tsx # Role-based sidebar navigation
 │   │   ├── EventCard.tsx
 │   │   ├── Navbar.tsx
+│   │   ├── Footer.tsx
 │   │   └── ...
 │   ├── lib/
 │   │   ├── api.ts             # Axios configuration
 │   │   ├── auth.ts            # Authentication helpers
+│   │   ├── events-api.ts      # Event API functions
+│   │   ├── mitra-api.ts       # Mitra API functions
 │   │   ├── formatters.ts      # Date & currency formatters
 │   │   └── utils.ts
 │   └── public/                # Static assets
@@ -112,42 +128,43 @@ nesavent/
     │   └── db.js              # MongoDB connection
     ├── controllers/
     │   ├── adminController.js # Admin dashboard & management
-    │   ├── authController.js
-    │   ├── eventController.js
-    │   ├── notificationController.js
-    │   ├── orderController.js
-    │   ├── paymentController.js
-    │   ├── promoCodeController.js
-    │   ├── settingsController.js
-    │   └── withdrawalController.js
+    │   ├── authController.js  # Authentication & password reset
+    │   ├── eventController.js # Event CRUD operations
+    │   ├── notificationController.js # Email notifications
+    │   ├── orderController.js # Order management & checkout
+    │   ├── paymentController.js # Midtrans payment integration
+    │   ├── promoCodeController.js # Promo code management
+    │   ├── settingsController.js # App settings
+    │   └── withdrawalController.js # Mitra withdrawal requests
     ├── middleware/
     │   ├── auth.js            # JWT authentication
     │   └── ...
     ├── models/
-    │   ├── Event.js
-    │   ├── Notification.js
-    │   ├── Order.js
-    │   ├── PromoCode.js
-    │   ├── Settings.js
-    │   ├── Ticket.js
-    │   ├── User.js
-    │   ├── Withdrawal.js
+    │   ├── Event.js           # Event schema with validation
+    │   ├── Notification.js    # Notification schema
+    │   ├── Order.js           # Order schema
+    │   ├── PromoCode.js       # Promo code schema
+    │   ├── Settings.js        # Settings schema
+    │   ├── Ticket.js          # Ticket schema
+    │   ├── User.js            # User schema with roles
+    │   ├── Withdrawal.js      # Withdrawal schema
     │   └── ...
     ├── routes/
     │   ├── admin.js           # Admin management routes
-    │   ├── auth.js
-    │   ├── events.js
-    │   ├── notifications.js
-    │   ├── orders.js
-    │   ├── payments.js
-    │   ├── promocodes.js
-    │   ├── settings.js
-    │   ├── tickets.js
-    │   └── withdrawals.js
+    │   ├── auth.js            # Authentication routes
+    │   ├── events.js          # Event routes
+    │   ├── notifications.js   # Notification routes
+    │   ├── orders.js          # Order routes
+    │   ├── payments.js        # Payment routes
+    │   ├── promocodes.js      # Promo code routes
+    │   ├── settings.js        # Settings routes
+    │   ├── tickets.js         # Ticket routes
+    │   └── withdrawals.js     # Withdrawal routes
     ├── utils/
-    │   ├── eventValidator.js  # Event validation logic
-    │   └── sendEmail.js       # Email service
-    ├── seed.js                # Database seeding
+    │   ├── emailService.js    # Email service with Mailpit
+    │   └── eventValidator.js  # Event validation logic
+    ├── seed.js                # Database seeding script
+    ├── update-slugs.js        # Slug migration script
     └── server.js              # Express app entry point
 ```
 
@@ -178,40 +195,82 @@ Platform ini dilengkapi dengan sistem validasi otomatis untuk mencegah event dum
 
 ---
 
-## 🔄 API Endpoints
+## 📧 Email System
 
-### Admin Only
-- `GET /api/admin/orders` - Get all orders across platform
-- `GET /api/admin/users` - Get all users
-- `PUT /api/admin/users/:id/role` - Update user role
-- `DELETE /api/admin/users/:id` - Delete user
-- `GET /api/admin/events` - Get all events for moderation
-- `PUT /api/admin/events/:id/approve` - Approve event
-- `PUT /api/admin/events/:id/reject` - Reject event with reason
-- `DELETE /api/admin/events/:id` - Delete event
-- `GET /api/admin/withdrawals` - Get withdrawal requests
-- `PUT /api/admin/withdrawals/:id/process` - Process withdrawal
-- `PUT /api/admin/withdrawals/:id/reject` - Reject withdrawal
-- `GET /api/admin/analytics/revenue` - Revenue analytics
+### Email Service Features
+- **Mailpit Integration**: Testing email dengan web interface
+- **SMTP Fallback**: Gmail SMTP untuk production
+- **Console Logging**: Development mode tanpa email server
+- **HTML Templates**: Template email responsif dan modern
+- **Auto Retry**: Mekanisme retry untuk pengiriman email
+
+### Email Templates
+- Password reset codes
+- Email verification
+- Order confirmations
+- Event notifications
+- Admin notifications
+
+### Setup Email Testing
+```bash
+# Install Mailpit (Windows)
+# Download dari: https://mailpit.axllent.org/
+
+# Atau gunakan Docker
+docker run -d -p 1025:1025 -p 8025:8025 --name mailpit axllent/mailpit
+
+# Access web interface
+# http://localhost:8025
+```
+
+---
+
+## 🔄 API Endpoints
 
 ### Authentication
 - `POST /api/auth/register` - User registration
 - `POST /api/auth/login` - User login
 - `POST /api/auth/forgot-password` - Request password reset
-- `POST /api/auth/reset-password` - Reset password
-- `GET /api/auth/verify-email` - Verify email
+- `POST /api/auth/reset-password` - Reset password with code
+- `GET /api/auth/verify-email` - Verify email address
+- `GET /api/auth/me` - Get current user profile
+- `PUT /api/auth/profile` - Update user profile
+- `PUT /api/auth/password` - Change password
 
 ### Events
 - `GET /api/events` - Get all events (public)
-- `GET /api/events/:id` - Get event details
+- `GET /api/events/:slug` - Get event details by slug
 - `POST /api/events` - Create event (mitra only)
-- `PUT /api/events/:id` - Update event (mitra only)
-- `DELETE /api/events/:id` - Delete event (mitra only)
+- `PUT /api/events/:slug` - Update event (mitra only)
+- `DELETE /api/events/:slug` - Delete event (mitra only)
+- `GET /api/events/my-events` - Get mitra's events
 
-### Orders
-- `GET /api/orders` - Get user orders
-- `POST /api/orders` - Create order
+### Orders & Checkout
+- `GET /api/orders/my-orders` - Get user orders
+- `POST /api/orders` - Create order (initial)
 - `GET /api/orders/:id` - Get order details
+- `PUT /api/orders/:id` - Update order buyer details
+- `PUT /api/orders/:id/pay` - Mark order as paid
+
+### Admin Only
+- `GET /api/admin/users` - Get all users
+- `PUT /api/admin/users/:id/role` - Update user role
+- `DELETE /api/admin/users/:id` - Delete user
+- `GET /api/admin/events` - Get events for moderation
+- `PUT /api/admin/events/:id/approve` - Approve event
+- `PUT /api/admin/events/:id/reject` - Reject event
+- `GET /api/admin/orders` - Get all orders
+- `GET /api/admin/analytics` - Get platform analytics
+
+### Mitra Features
+- `GET /api/mitra/profile/:slug` - Get mitra profile
+- `GET /api/mitra/events/:slug` - Get mitra's events
+- `GET /api/mitra/stats/:slug` - Get mitra statistics
+
+### Tickets
+- `GET /api/tickets/my-tickets` - Get user tickets
+- `GET /api/tickets/:id` - Get ticket details
+- `PUT /api/tickets/:id/validate` - Validate ticket (admin/mitra)
 
 ### Payments
 - `POST /api/payments/create` - Create Midtrans payment
@@ -229,32 +288,48 @@ NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=your_midtrans_client_key
 
 ### Backend (.env)
 ```env
+# Server Configuration
 PORT=5000
+NODE_ENV=development
+
+# Database
 MONGO_URI=mongodb://localhost:27017/nesavent
+
+# JWT
 JWT_SECRET=your_super_secret_jwt_key_here
-JWT_EXPIRE=30d
+JWT_EXPIRE=24h
 
 # Midtrans Payment Gateway
 MIDTRANS_SERVER_KEY=your_midtrans_server_key
 MIDTRANS_CLIENT_KEY=your_midtrans_client_key
 MIDTRANS_IS_PRODUCTION=false
 
-# Email Configuration (untuk notifications)
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your_email@gmail.com
-EMAIL_PASS=your_app_password
+# Email Configuration (Development - Mailpit)
+EMAIL_HOST=localhost
+EMAIL_PORT=1025
+EMAIL_USER=
+EMAIL_PASS=
 EMAIL_FROM=noreply@nesavent.com
 
-# Frontend URL (untuk email links)
+# Email Configuration (Production - Gmail SMTP)
+# EMAIL_HOST=smtp.gmail.com
+# EMAIL_PORT=587
+# EMAIL_USER=your_email@gmail.com
+# EMAIL_PASS=your_app_password
+
+# Frontend URL
 FRONTEND_URL=http://localhost:3000
+
+# File Upload
+MAX_FILE_SIZE=5000000
+UPLOAD_PATH=./uploads
 ```
 
 ---
 
 ## 🎯 Development Workflow
 
-### 2. Sample Accounts (from seed data)
+### Sample Accounts (from seed data)
 
 **Admin Account:**
 ```
@@ -263,46 +338,46 @@ Password: password123
 Access: Full admin dashboard (/dashboard) with user management, event moderation, order oversight
 ```
 
-**Mitra Account:**
+**Mitra Accounts (15 total):**
 ```
-Email: mitra@nesavent.com
+Email: mitra1@nesavent.com - mitra15@nesavent.com
 Password: password123
 Access: Mitra dashboard (/dashboard) with event creation, analytics, order management
 ```
 
-**User Account:**
+**User Accounts (30 total):**
 ```
-Email: user@nesavent.com
+Email: mhs1@nesavent.com - mhs30@nesavent.com
 Password: password123
 Access: Public pages, event browsing, ticket purchasing, order history
 ```
 
-**Dashboard Access:**
-- Admin: Login → automatically redirected to admin dashboard
-- Mitra: Login → automatically redirected to mitra dashboard
-- User: Login → redirected to homepage with user menu
+### Testing Complete Flow
 
-### 4. Testing Admin Features
-1. Login as admin (`admin@nesavent.com` / `password123`)
-2. Access admin dashboard (`/dashboard`)
-3. **User Management** (`/dashboard/users`):
-   - View all registered users
-   - Change user roles using dropdown
-   - Delete users with confirmation
-   - Filter by role and search by name/email
-4. **Event Moderation** (`/dashboard/admin-events`):
-   - View pending events requiring approval
-   - Approve or reject events with reasons
-   - Filter events by status
-   - View event details and creator info
-5. **Order Management** (`/dashboard/admin-orders`):
-   - View all orders across the platform
-   - Filter by payment status
-   - Search orders by ID, buyer name, or event
-6. **Withdrawal Processing** (`/dashboard/withdrawals`):
-   - Process pending withdrawal requests
-   - Reject withdrawals with reasons
-7. View platform analytics and statistics
+1. **User Registration & Login**
+   - Register new account or use seeded accounts
+   - Test forgot password functionality
+
+2. **Event Creation (Mitra)**
+   - Login as mitra (mitra1@nesavent.com)
+   - Create new event with multiple ticket types
+   - Wait for admin approval or login as admin to approve
+
+3. **Event Browsing & Purchasing (User)**
+   - Login as user (mhs1@nesavent.com)
+   - Browse events and select tickets
+   - Complete checkout process
+   - View orders in dashboard
+
+4. **Admin Moderation**
+   - Login as admin (admin@nesavent.com)
+   - Moderate pending events
+   - Manage users and orders
+   - View platform analytics
+
+5. **Email Testing**
+   - Test forgot password flow
+   - Check emails in Mailpit web interface (http://localhost:8025)
 
 ---
 
@@ -312,12 +387,16 @@ Access: Public pages, event browsing, ticket purchasing, order history
 ```javascript
 {
   nama: String,
+  slug: String, // unique URL slug
   email: String,
-  password: String, // hashed
+  password: String, // bcrypt hashed
   nomorTelepon: String,
-  role: ['admin', 'mitra', 'user'],
+  role: ['admin', 'mitra', 'mahasiswa', 'user'],
   organisasi: String, // for mitra
+  avatar: String,
   isVerified: Boolean,
+  verificationCode: String,
+  resetPasswordCode: String,
   createdAt: Date
 }
 ```
@@ -326,6 +405,7 @@ Access: Public pages, event browsing, ticket purchasing, order history
 ```javascript
 {
   nama: String,
+  slug: String, // unique URL slug
   deskripsi: String,
   tanggal: Date,
   waktu: String,
@@ -336,11 +416,16 @@ Access: Public pages, event browsing, ticket purchasing, order history
     harga: Number,
     stok: Number,
     stokTersisa: Number,
-    deskripsi: String
+    deskripsi: String,
+    maxPembelianPerOrang: Number,
+    mulaiJual: Date,
+    akhirJual: Date,
+    allowedRoles: [String]
   }],
   gambar: String,
   penyelenggara: String,
   status: ['draft', 'pending', 'approved', 'rejected', 'aktif', 'selesai'],
+  validationScore: Number,
   createdBy: ObjectId, // reference to User
   createdAt: Date
 }
@@ -352,19 +437,19 @@ Access: Public pages, event browsing, ticket purchasing, order history
   user: ObjectId, // reference to User
   event: ObjectId, // reference to Event
   items: [{
-    tipeTiket: ObjectId,
+    tipeTiket: String,
     namaTipe: String,
     hargaSatuan: Number,
     jumlah: Number,
     subtotal: Number
   }],
   totalHarga: Number,
-  discountAmount: Number,
-  finalTotal: Number,
-  namaPembeli: String,
-  emailPembeli: String,
-  nomorTelepon: String,
+  namaPembeli: String, // optional initially
+  emailPembeli: String, // optional initially
+  nomorTelepon: String, // optional initially
   status: ['pending', 'paid', 'cancelled', 'expired'],
+  paymentToken: String,
+  transactionId: String,
   paidAt: Date,
   createdAt: Date
 }
@@ -378,6 +463,7 @@ Access: Public pages, event browsing, ticket purchasing, order history
 ```bash
 npm run dev      # Start development server with nodemon
 npm run seed     # Seed database with sample data
+npm run update-slugs # Update existing records with slugs
 npm start        # Start production server
 ```
 
@@ -397,12 +483,44 @@ npm run lint     # Run ESLint
 1. Set environment variables for production
 2. Set `MIDTRANS_IS_PRODUCTION=true`
 3. Configure MongoDB production URI
-4. Deploy to cloud platform (Vercel, Railway, etc.)
+4. Configure Gmail SMTP for email
+5. Deploy to cloud platform (Vercel, Railway, Heroku, etc.)
 
 ### Frontend Deployment
 1. Build the application: `npm run build`
 2. Set production environment variables
 3. Deploy to Vercel, Netlify, or similar platform
+
+### Production Email Setup
+```env
+# Production Email (Gmail SMTP)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+```
+
+---
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Email not sending in development**
+   - Start Mailpit: `docker run -d -p 1025:1025 -p 8025:8025 axllent/mailpit`
+   - Or check console logs for email content
+
+2. **Login issues**
+   - Run `npm run seed` to create sample users
+   - Check password hashing in User model
+
+3. **Event validation errors**
+   - Buyer details are now optional during order creation
+   - Fill them during checkout process
+
+4. **MongoDB connection issues**
+   - Check MONGO_URI in .env file
+   - Ensure MongoDB is running
 
 ---
 
