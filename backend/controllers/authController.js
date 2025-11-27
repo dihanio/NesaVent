@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { sendVerificationCode, sendPasswordResetCode } = require('../utils/emailService');
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -8,12 +9,12 @@ const generateToken = (id) => {
   });
 };
 
-// @desc    Register user baru
+// @desc    Register user baru (hanya untuk user biasa dan mahasiswa)
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
   try {
-    const { nama, email, password, nomorTelepon, role, organisasi } = req.body;
+    const { nama, email, password, nomorTelepon } = req.body;
 
     // Cek apakah user sudah ada
     const userExists = await User.findOne({ email });
@@ -22,9 +23,12 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'Email sudah terdaftar' });
     }
 
-    // Validasi role
-    const validRoles = ['user', 'mitra'];
-    const userRole = role && validRoles.includes(role) ? role : 'user';
+    // Deteksi email mahasiswa
+    const isMahasiswaEmail = email.endsWith('@mhs.unesa.ac.id');
+
+    // Set role berdasarkan email
+    // Registrasi publik hanya untuk user biasa dan mahasiswa
+    const userRole = isMahasiswaEmail ? 'mahasiswa' : 'user';
 
     // Buat user baru
     const user = await User.create({
@@ -33,7 +37,6 @@ const registerUser = async (req, res) => {
       password,
       nomorTelepon,
       role: userRole,
-      organisasi: userRole === 'mitra' ? organisasi : undefined,
     });
 
     if (user) {
@@ -61,10 +64,23 @@ const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log(`[LOGIN] Attempting login for email: ${email}`);
+
     // Cek email
     const user = await User.findOne({ email });
 
-    if (user && (await user.matchPassword(password))) {
+    if (!user) {
+      console.log(`[LOGIN] User not found for email: ${email}`);
+      return res.status(401).json({ message: 'Email atau password salah' });
+    }
+
+    console.log(`[LOGIN] User found: ${user.nama} (${user.email})`);
+
+    const isPasswordValid = await user.matchPassword(password);
+    console.log(`[LOGIN] Password valid: ${isPasswordValid}`);
+
+    if (isPasswordValid) {
+      console.log(`[LOGIN] Login successful for: ${user.email}`);
       res.json({
         _id: user._id,
         nama: user.nama,
@@ -75,9 +91,11 @@ const loginUser = async (req, res) => {
         token: generateToken(user._id),
       });
     } else {
+      console.log(`[LOGIN] Password invalid for: ${user.email}`);
       res.status(401).json({ message: 'Email atau password salah' });
     }
   } catch (error) {
+    console.error(`[LOGIN] Error:`, error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -189,10 +207,195 @@ const changePassword = async (req, res) => {
   }
 };
 
+// @desc    Get user public profile
+// @route   GET /api/auth/public-profile/:slug
+// @access  Public
+const getPublicProfile = async (req, res) => {
+  try {
+    const user = await User.findOne({ slug: req.params.slug }).select('nama organisasi avatar slug');
+
+    if (user) {
+      res.json(user);
+    } else {
+      res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Verify email with code
+// @route   POST /api/auth/verify-code
+// @access  Public
+const verifyCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    const user = await User.findOne({
+      email,
+      verificationCode: code,
+      verificationCodeExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Kode verifikasi salah atau sudah kedaluwarsa' });
+    }
+
+    // Mark user as verified
+    user.isVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await user.save();
+
+    res.json({
+      _id: user._id,
+      nama: user.nama,
+      email: user.email,
+      nomorTelepon: user.nomorTelepon,
+      role: user.role,
+      organisasi: user.organisasi,
+      token: generateToken(user._id),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Forgot password - kirim email reset
+// @route   POST /api/auth/forgot-password
+// @access  Public
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    console.log(`[FORGOT PASSWORD] Request for email: ${email}`);
+
+    // Cek apakah user ada
+    const user = await User.findOne({ email });
+    console.log(`[FORGOT PASSWORD] User found: ${!!user}`);
+
+    if (!user) {
+      // Untuk security, tetap return success meskipun email tidak ditemukan
+      console.log(`[FORGOT PASSWORD] User not found, returning success for security`);
+      return res.json({ message: 'Jika email terdaftar, kode reset password telah dikirim.' });
+    }
+
+    // Generate reset password code (OTP)
+    const resetPasswordCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetPasswordCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.resetPasswordCode = resetPasswordCode;
+    user.resetPasswordCodeExpires = resetPasswordCodeExpires;
+    await user.save();
+    console.log(`[FORGOT PASSWORD] Generated code: ${resetPasswordCode}, expires: ${resetPasswordCodeExpires}`);
+
+    // Send password reset email
+    try {
+      console.log(`[FORGOT PASSWORD] Attempting to send email to: ${email}`);
+      await sendPasswordResetCode(email, resetPasswordCode);
+      console.log(`[FORGOT PASSWORD] Email sent successfully to: ${email}`);
+    } catch (emailError) {
+      console.error(`[FORGOT PASSWORD] Failed to send email to ${email}:`, emailError);
+      // Don't fail the request if email fails, just log it
+    }
+
+    res.json({
+      message: 'Kode reset password telah dikirim ke email Anda.',
+      email: email
+    });
+  } catch (error) {
+    console.error('[FORGOT PASSWORD] Unexpected error:', error);
+    res.status(500).json({ message: 'Terjadi kesalahan. Silakan coba lagi.' });
+  }
+};
+
+// @desc    Resend verification code
+// @route   POST /api/auth/resend-code
+// @access  Public
+const resendVerificationCode = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    // Generate new verification code
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpires = verificationCodeExpires;
+    await user.save();
+
+    // Send verification email
+    try {
+      await sendVerificationCode(email, verificationCode);
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
+      // Don't fail the request if email fails, just log it
+    }
+
+    res.json({ message: 'Kode verifikasi baru telah dikirim ke email Anda' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Reset password with code
+// @route   POST /api/auth/reset-password
+// @access  Public
+const resetPassword = async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    console.log(`[RESET PASSWORD] Attempting reset for email: ${email}, code: ${code}`);
+
+    const user = await User.findOne({
+      email,
+      resetPasswordCode: code,
+      resetPasswordCodeExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      console.log(`[RESET PASSWORD] User/code not found or expired for: ${email}`);
+      return res.status(400).json({ message: 'Kode reset password salah atau sudah kedaluwarsa' });
+    }
+
+    console.log(`[RESET PASSWORD] User found: ${user.nama} (${user.email})`);
+    console.log(`[RESET PASSWORD] Old password hash starts with: ${user.password.substring(0, 10)}...`);
+    console.log(`[RESET PASSWORD] Setting new password: ${newPassword.substring(0, 3)}...`);
+
+    // Update password
+    user.password = newPassword;
+    user.resetPasswordCode = null;
+    user.resetPasswordCodeExpires = null;
+
+    // Ensure password is marked as modified
+    user.markModified('password');
+
+    await user.save();
+
+    console.log(`[RESET PASSWORD] Password reset successful for: ${user.email}`);
+    console.log(`[RESET PASSWORD] New password hash starts with: ${user.password.substring(0, 10)}...`);
+
+    res.json({ message: 'Password berhasil direset' });
+  } catch (error) {
+    console.error(`[RESET PASSWORD] Error:`, error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
   updateProfile,
   changePassword,
+  getPublicProfile,
+  forgotPassword,
+  verifyCode,
+  resendVerificationCode,
+  resetPassword,
 };

@@ -5,8 +5,13 @@ const Event = require('../models/Event');
 // @access  Public
 const getAllEvents = async (req, res) => {
   try {
-    const { kategori, search } = req.query;
+    const { kategori, search, sort, page = 1, limit = 0, organizer } = req.query;
     let query = { status: 'aktif' };
+
+    // Filter berdasarkan organizer (createdBy)
+    if (organizer) {
+      query.createdBy = organizer;
+    }
 
     // Filter berdasarkan kategori
     if (kategori && kategori !== 'Semua') {
@@ -21,26 +26,90 @@ const getAllEvents = async (req, res) => {
       ];
     }
 
-    const events = await Event.find(query).sort({ tanggal: 1 });
-    res.json(events);
+    // Sorting
+    let sortOption = { tanggal: 1 }; // Default: Terdekat (Upcoming)
+
+    if (sort === 'newest') {
+      sortOption = { createdAt: -1 }; // Terbaru dibuat
+    } else if (sort === 'upcoming') {
+      sortOption = { tanggal: 1 }; // Terdekat
+      query.tanggal = { $gte: new Date() }; // Hanya yang belum lewat
+    } else if (sort === 'popular') {
+      sortOption = { views: -1 }; // Terbanyak dilihat
+    }
+
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    let eventsQuery = Event.find(query).sort(sortOption);
+
+    if (limitNum > 0) {
+      eventsQuery = eventsQuery.skip(skip).limit(limitNum);
+    }
+
+    const events = await eventsQuery;
+
+    // Get total count for pagination
+    const total = await Event.countDocuments(query);
+
+    res.json({
+      data: events,
+      pagination: limitNum > 0 ? {
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+        hasMore: skip + events.length < total
+      } : null
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
 // @desc    Get detail event
-// @route   GET /api/events/:id
+// @route   GET /api/events/:slug
 // @access  Public
 const getEventById = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const { slug } = req.params;
+    console.log('Requested slug:', slug);
 
-    if (event) {
-      res.json(event);
-    } else {
-      res.status(404).json({ message: 'Event tidak ditemukan' });
+    // Use raw MongoDB query to avoid any Mongoose issues
+    const mongoose = require('mongoose');
+    const db = mongoose.connection.db;
+    const eventsCollection = db.collection('events');
+
+    const event = await eventsCollection.findOne({ slug: slug });
+    console.log('Raw query result:', event ? 'found' : 'not found');
+
+    if (!event) {
+      return res.status(404).json({ message: 'Event tidak ditemukan' });
     }
+
+    // Populate createdBy manually
+    if (event.createdBy) {
+      const usersCollection = db.collection('users');
+      const creator = await usersCollection.findOne(
+        { _id: new mongoose.Types.ObjectId(event.createdBy) },
+        { nama: 1, organisasi: 1, avatar: 1, slug: 1 }
+      );
+      if (creator) {
+        event.createdBy = creator;
+      }
+    }
+
+    // Increment views
+    await eventsCollection.updateOne(
+      { _id: event._id },
+      { $inc: { views: 1 } }
+    );
+    event.views = (event.views || 0) + 1;
+
+    res.json(event);
   } catch (error) {
+    console.error('Error in getEventById:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -75,10 +144,32 @@ const createEvent = async (req, res) => {
       stokTersisa: tiket.stok
     }));
 
+    // Generate slug
+    const slugify = (text) => {
+      return text
+        .toString()
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '-')
+        .replace(/[^\w\-]+/g, '')
+        .replace(/\-\-+/g, '-')
+        .replace(/^-+/, '')
+        .replace(/-+$/, '');
+    };
+
+    let baseSlug = slugify(nama);
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (await Event.findOne({ slug })) {
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+
     // Tentukan status berdasarkan role user
     let status = 'draft';
     let isVerified = false;
-    
+
     // Jika admin yang buat, langsung aktif
     if (req.user.role === 'admin') {
       status = 'aktif';
@@ -87,6 +178,7 @@ const createEvent = async (req, res) => {
 
     const event = await Event.create({
       nama,
+      slug,
       deskripsi,
       tanggal,
       waktu,
@@ -104,8 +196,8 @@ const createEvent = async (req, res) => {
 
     res.status(201).json({
       event,
-      message: req.user.role === 'admin' 
-        ? 'Event berhasil dibuat dan dipublikasikan' 
+      message: req.user.role === 'admin'
+        ? 'Event berhasil dibuat dan dipublikasikan'
         : 'Event berhasil dibuat sebagai draft. Silakan ajukan untuk verifikasi admin.'
     });
   } catch (error) {
@@ -114,11 +206,11 @@ const createEvent = async (req, res) => {
 };
 
 // @desc    Update event
-// @route   PUT /api/events/:id
+// @route   PUT /api/events/:slug
 // @access  Private
 const updateEvent = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ slug: req.params.slug });
 
     if (event) {
       Object.assign(event, req.body);
@@ -133,11 +225,11 @@ const updateEvent = async (req, res) => {
 };
 
 // @desc    Hapus event
-// @route   DELETE /api/events/:id
+// @route   DELETE /api/events/:slug
 // @access  Private
 const deleteEvent = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ slug: req.params.slug });
 
     if (event) {
       await event.deleteOne();
@@ -150,10 +242,74 @@ const deleteEvent = async (req, res) => {
   }
 };
 
+// @desc    Get events by partner slug
+// @route   GET /api/events/partner/:partnerSlug
+// @access  Public
+const getEventsByPartnerId = async (req, res) => {
+  try {
+    const { partnerSlug } = req.params;
+    const { page = 1, limit = 0 } = req.query;
+    
+    // Find partner by slug
+    const User = require('../models/User');
+    const partner = await User.findOne({ slug: partnerSlug });
+    
+    if (!partner) {
+      return res.status(404).json({ message: 'Partner tidak ditemukan' });
+    }
+    
+    if (partner.role !== 'mitra' && partner.role !== 'admin') {
+      return res.status(400).json({ message: 'User bukan partner' });
+    }
+    
+    // Build query
+    let query = {
+      createdBy: partner._id,
+      status: 'aktif'
+    };
+    
+    // Pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    let eventsQuery = Event.find(query).sort({ createdAt: -1 });
+    
+    if (limitNum > 0) {
+      eventsQuery = eventsQuery.skip(skip).limit(limitNum);
+    }
+    
+    const events = await eventsQuery;
+    
+    // Get total count for pagination
+    const total = await Event.countDocuments(query);
+    
+    res.json({
+      partner: {
+        _id: partner._id,
+        nama: partner.nama,
+        organisasi: partner.organisasi,
+        email: partner.email,
+        slug: partner.slug
+      },
+      data: events,
+      pagination: limitNum > 0 ? {
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+        hasMore: skip + events.length < total
+      } : null
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getAllEvents,
   getEventById,
   createEvent,
   updateEvent,
   deleteEvent,
+  getEventsByPartnerId,
 };

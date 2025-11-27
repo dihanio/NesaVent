@@ -20,6 +20,7 @@ interface TicketType {
 interface Event {
   _id: string;
   nama: string;
+  slug: string;
   tanggal: string;
   lokasi: string;
   kategori: string;
@@ -65,22 +66,22 @@ export default function EventsListPage() {
     }
   };
 
-  const handleDeleteEvent = async (id: string) => {
+  const handleDeleteEvent = async (slug: string) => {
     if (!confirm('Yakin ingin menghapus event ini?')) return;
 
     try {
-      await api.delete(`/events/${id}`);
+      await api.delete(`/events/${slug}`);
       fetchEvents();
     } catch (error: any) {
       alert(error.response?.data?.message || 'Gagal menghapus event');
     }
   };
 
-  const handleSubmitEvent = async (id: string) => {
+  const handleSubmitEvent = async (slug: string) => {
     if (!confirm('Ajukan event ini untuk verifikasi admin?')) return;
 
     try {
-      const response = await api.put(`/admin/events/${id}/submit`);
+      const response = await api.put(`/admin/events/${slug}/submit`);
       alert(response.data.message);
       fetchEvents();
     } catch (error: any) {
@@ -321,7 +322,7 @@ export default function EventsListPage() {
                   <div className="flex flex-col gap-2">
                     {event.status === 'draft' && (
                       <button
-                        onClick={() => handleSubmitEvent(event._id)}
+                        onClick={() => handleSubmitEvent(event.slug)}
                         className="w-full bg-green-600 text-white py-2.5 px-4 rounded-lg hover:bg-green-700 transition font-semibold text-sm flex items-center justify-center gap-2 shadow-md"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -333,7 +334,7 @@ export default function EventsListPage() {
                     <div className="flex gap-2">
                       {(event.status === 'draft' || event.status === 'ditolak') && (
                         <Link
-                          href={`/dashboard/events/edit/${event._id}`}
+                          href={`/dashboard/events/edit/${event.slug}`}
                           className="flex-1 bg-blue-100 text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-200 transition text-center font-medium text-sm"
                         >
                           Edit
@@ -341,14 +342,14 @@ export default function EventsListPage() {
                       )}
                       {(event.status === 'aktif' || event.status === 'pending') && (
                         <Link
-                          href={`/dashboard/events/analytics/${event._id}`}
+                          href={`/dashboard/events/analytics/${event.slug}`}
                           className="flex-1 bg-yellow-100 text-yellow-700 py-2 px-3 rounded-lg hover:bg-yellow-200 transition text-center font-medium text-sm"
                         >
                           Analytics
                         </Link>
                       )}
                       <button
-                        onClick={() => handleDeleteEvent(event._id)}
+                        onClick={() => handleDeleteEvent(event.slug)}
                         className="bg-red-100 text-red-700 py-2 px-3 rounded-lg hover:bg-red-200 transition font-medium text-sm"
                       >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

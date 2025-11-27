@@ -13,6 +13,7 @@ interface TicketType {
 interface Event {
   _id: string;
   nama: string;
+  slug: string;
   deskripsi: string;
   tanggal: string;
   waktu: string;
@@ -52,10 +53,10 @@ export default function EventCard({ event }: EventCardProps) {
   const totalStok = getTotalStok();
 
   return (
-    <Link href={`/events/${event._id}`}>
-      <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full">
+    <Link href={`/events/${event.slug}`}>
+      <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer h-full flex flex-col">
         {/* Image */}
-        <div className="relative h-48 bg-gray-200">
+        <div className="relative h-48 bg-gray-200 shrink-0">
           <img
             src={event.gambar}
             alt={event.nama}
@@ -70,12 +71,12 @@ export default function EventCard({ event }: EventCardProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4">
-          <h3 className="font-bold text-xl mb-2 text-gray-800 line-clamp-2">
+        <div className="p-4 flex flex-col flex-grow">
+          <h3 className="font-bold text-xl mb-2 text-gray-800 line-clamp-2 h-14">
             {event.nama}
           </h3>
 
-          <div className="space-y-2 text-sm text-gray-600">
+          <div className="space-y-2 text-sm text-gray-600 mb-4">
             <div className="flex items-start">
               <svg
                 className="w-5 h-5 mr-2 shrink-0 text-blue-600"
@@ -134,24 +135,26 @@ export default function EventCard({ event }: EventCardProps) {
             </div>
           </div>
 
-          <div className="mt-4 flex justify-between items-center">
-            <div>
-              <p className="text-sm text-gray-500">Harga mulai dari</p>
-              <p className="text-xl font-bold text-blue-600">
-                {minPrice > 0 ? formatHarga(minPrice) : 'Gratis'}
-              </p>
+          <div className="mt-auto">
+            <div className="flex justify-between items-center mb-4 pt-4 border-t border-gray-100">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Harga mulai dari</p>
+                <p className="text-lg font-bold text-blue-600">
+                  {minPrice > 0 ? formatHarga(minPrice) : 'Gratis'}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500 mb-1">Sisa tiket</p>
+                <p className={`text-sm font-semibold ${totalStok > 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                  {totalStok > 0 ? totalStok : 'Habis'}
+                </p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Sisa tiket</p>
-              <p className={`text-lg font-semibold ${totalStok > 0 ? 'text-gray-800' : 'text-red-600'}`}>
-                {totalStok > 0 ? totalStok : 'Habis'}
-              </p>
-            </div>
-          </div>
 
-          <button className="w-full mt-4 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
-            Lihat Detail
-          </button>
+            <button className="w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition font-medium shadow-sm hover:shadow-md">
+              Lihat Detail
+            </button>
+          </div>
         </div>
       </div>
     </Link>

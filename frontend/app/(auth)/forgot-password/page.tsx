@@ -20,7 +20,12 @@ export default function ForgotPasswordPage() {
             const response = await api.post('/auth/forgot-password', { email });
             console.log('✅ Forgot Password - Success:', response.data);
             setStatus('success');
-            setMessage(response.data.message || 'Email reset password telah dikirim');
+            setMessage(response.data.message || 'Kode reset password telah dikirim ke email Anda');
+
+            // Redirect to reset password page after 2 seconds
+            setTimeout(() => {
+                window.location.href = `/reset-password?email=${encodeURIComponent(email)}`;
+            }, 2000);
         } catch (error: any) {
             console.error('❌ Forgot Password - Error:', error.response?.data || error.message);
             setStatus('error');
@@ -45,7 +50,7 @@ export default function ForgotPasswordPage() {
                     {/* Left Side - Image */}
                     <div className="hidden md:block relative bg-blue-600">
                         <img
-                            src="/images/login-illustration.jpg"
+                            src="https://images.unsplash.com/photo-1556761175-b413da4baf72?w=800&h=600&fit=crop"
                             alt="Login Illustration"
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -62,7 +67,7 @@ export default function ForgotPasswordPage() {
                                 Lupa Password
                             </h2>
                             <p className="text-center text-gray-600 mb-8">
-                                Masukkan email Anda untuk menerima link reset password.
+                                Masukkan email Anda untuk menerima kode reset password.
                             </p>
                         </div>
 
@@ -128,7 +133,7 @@ export default function ForgotPasswordPage() {
                                         disabled={status === 'loading'}
                                         className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                     >
-                                        {status === 'loading' ? 'Memproses...' : 'Kirim Link Reset'}
+                                        {status === 'loading' ? 'Memproses...' : 'Kirim Kode Reset'}
                                     </button>
                                 </div>
 

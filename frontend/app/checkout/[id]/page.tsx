@@ -2,41 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Script from 'next/script';
 import api from '@/lib/api';
 import { authService } from '@/lib/auth';
-import PromoCodeInput from '@/components/PromoCodeInput';
-
-declare global {
-  interface Window {
-    snap: any;
-  }
-}
-
-interface BuyerDetail {
-  ticketTypeId: string;
-  nama: string;
-  email: string;
-  nomorTelepon: string;
-  useAccountDetails?: boolean;
-}
 
 interface Order {
   _id: string;
-  jumlahTiket: number;
-  totalHarga: number;
-  discountAmount?: number;
-  finalTotal?: number;
-  namaPembeli: string;
-  emailPembeli: string;
-  nomorTelepon: string;
-  buyerDetails?: BuyerDetail[];
-  status: string;
-  user?: {
-    nama: string;
-    email: string;
-    nomorTelepon?: string;
-  };
   event: {
     _id: string;
     nama: string;
@@ -45,20 +15,18 @@ interface Order {
     lokasi: string;
     gambar: string;
   };
-  items?: {
-    ticketTypeId: string;
+  items: Array<{
+    tipeTiket: string;
     namaTipe: string;
     hargaSatuan: number;
     jumlah: number;
     subtotal: number;
-  }[];
-  promoCode?: {
-    _id: string;
-    code: string;
-    discountType: string;
-    discountValue: number;
-    description?: string;
-  };
+  }>;
+  totalHarga: number;
+  status: string;
+  namaPembeli?: string;
+  emailPembeli?: string;
+  nomorTelepon?: string;
 }
 
 export default function CheckoutPage() {
@@ -66,26 +34,19 @@ export default function CheckoutPage() {
   const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [snapReady, setSnapReady] = useState(false);
-  const [buyerDetails, setBuyerDetails] = useState<BuyerDetail[]>([]);
-  const [submittingDetails, setSubmittingDetails] = useState(false);
-  const [hasUsedAccountDetails, setHasUsedAccountDetails] = useState(false);
-  const [appliedPromoCode, setAppliedPromoCode] = useState<any>(null);
-  const [currentTotal, setCurrentTotal] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  // Form state
+  const [formData, setFormData] = useState({
+    namaPembeli: '',
+    emailPembeli: '',
+    nomorTelepon: '',
+  });
 
   useEffect(() => {
     if (!authService.isAuthenticated()) {
       router.push('/login');
-      return;
-    }
-
-    // Check if user is mitra or admin - they cannot buy tickets
-    if (authService.isMitraOrAdmin()) {
-      const currentUser = authService.getCurrentUser();
-      const roleText = currentUser?.role === 'mitra' ? 'mitra' : 'admin';
-      alert(`Akun ${roleText} tidak dapat membeli tiket. Silakan gunakan akun regular untuk pembelian tiket.`);
-      router.push('/');
       return;
     }
 
@@ -96,61 +57,30 @@ export default function CheckoutPage() {
     try {
       const response = await api.get(`/orders/${params.id}`);
       setOrder(response.data);
-      setCurrentTotal(response.data.finalTotal || response.data.totalHarga);
-      setAppliedPromoCode(response.data.promoCode || null);
-      
-      // Check if user has used account details before
-      await checkHasUsedAccountDetails();
-      
-      // Initialize buyer details if not present or empty
-      if (response.data.items && (!response.data.buyerDetails || response.data.buyerDetails.length === 0)) {
-        const details: BuyerDetail[] = [];
-        response.data.items.forEach((item: any) => {
-          for (let i = 0; i < item.jumlah; i++) {
-            details.push({
-              ticketTypeId: item.ticketTypeId,
-              nama: '',
-              email: '',
-              nomorTelepon: '',
-              useAccountDetails: false, // Don't auto-enable, let user choose
-            });
-          }
+
+      // Pre-fill form with user data if available
+      const currentUser = authService.getCurrentUser();
+      if (currentUser) {
+        setFormData({
+          namaPembeli: currentUser.nama || '',
+          emailPembeli: currentUser.email || '',
+          nomorTelepon: currentUser.nomorTelepon || '',
         });
-        setBuyerDetails(details);
-      } else if (response.data.buyerDetails && response.data.buyerDetails.length > 0) {
-        setBuyerDetails(response.data.buyerDetails);
-      } else {
-        setBuyerDetails([]);
       }
     } catch (error) {
       console.error('Error fetching order:', error);
+      setError('Order tidak ditemukan');
     } finally {
       setLoading(false);
     }
   };
 
-  const checkHasUsedAccountDetails = async () => {
-    try {
-      // Check if user has any paid orders with buyer details that match their account data
-      const response = await api.get('/orders/my-orders');
-      const orders = response.data;
-      const currentUser = authService.getCurrentUser();
-      
-      const hasUsed = orders.some((order: any) => {
-        if (order.status === 'paid' && order.buyerDetails && order.buyerDetails.length > 0 && currentUser) {
-          return order.buyerDetails.some((detail: any) => {
-            return detail.nama === currentUser.nama && 
-                   detail.email === currentUser.email && 
-                   detail.nomorTelepon === currentUser.nomorTelepon;
-          });
-        }
-        return false;
-      });
-      setHasUsedAccountDetails(hasUsed);
-    } catch (error) {
-      console.error('Error checking account details usage:', error);
-      setHasUsedAccountDetails(false);
-    }
+  const formatHarga = (harga: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+    }).format(harga);
   };
 
   const formatTanggal = (tanggal: string) => {
@@ -162,159 +92,47 @@ export default function CheckoutPage() {
     });
   };
 
-  const formatHarga = (harga: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(harga);
-  };
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
 
-  const isBuyerDetailsComplete = () => {
-    if (!buyerDetails || buyerDetails.length === 0) return false;
-    
-    // Check if all required fields are filled
-    for (const detail of buyerDetails) {
-      if (!detail.useAccountDetails) {
-        if (!detail.nama || !detail.email || !detail.nomorTelepon) {
-          return false;
-        }
-      }
+    // Validate form
+    if (!formData.namaPembeli.trim()) {
+      setError('Nama pembeli wajib diisi');
+      return;
     }
-    return true;
-  };
-
-  const updateBuyerDetail = (index: number, field: keyof BuyerDetail, value: string | boolean) => {
-    setBuyerDetails(prev => prev.map((detail, i) => {
-      if (i === index) {
-        const updated = { ...detail, [field]: value };
-        
-        // Handle useAccountDetails toggle
-        if (field === 'useAccountDetails') {
-          if (value && hasUsedAccountDetails) {
-            // User has used account details before, don't allow
-            alert('Anda sudah pernah menggunakan detail akun untuk pembelian sebelumnya. Silakan isi detail secara manual untuk tiket ini.');
-            return detail; // Don't change
-          }
-          
-          if (value) {
-            // When enabling, disable all other tickets that might be using account details
-            // This will be handled by the return logic below
-            const currentUser = authService.getCurrentUser();
-            console.log('Current user data:', currentUser); // Debug log
-            
-            if (!currentUser) {
-              alert('Data akun tidak ditemukan. Silakan login kembali.');
-              return detail;
-            }
-            
-            if (!currentUser.nama || !currentUser.email || !currentUser.nomorTelepon) {
-              alert('Data akun tidak lengkap. Silakan lengkapi profil Anda terlebih dahulu.');
-              return detail;
-            }
-            
-            updated.nama = currentUser.nama;
-            updated.email = currentUser.email;
-            updated.nomorTelepon = currentUser.nomorTelepon;
-            console.log('Updated detail with account data:', updated); // Debug log
-          } else {
-            // Clear fields when unchecked
-            updated.nama = '';
-            updated.email = '';
-            updated.nomorTelepon = '';
-          }
-        }
-        
-        return updated;
-      } else if (field === 'useAccountDetails' && value) {
-        // If enabling for current ticket, disable all others
-        return { ...detail, useAccountDetails: false, nama: '', email: '', nomorTelepon: '' };
-      }
-      
-      return detail;
-    }));
-  };
-
-  const handlePromoCodeApplied = (promoCode: any, discountAmount: number, finalTotal: number) => {
-    setAppliedPromoCode(promoCode);
-    setCurrentTotal(finalTotal);
-  };
-
-  const handlePromoCodeRemoved = () => {
-    setAppliedPromoCode(null);
-    setCurrentTotal(order?.totalHarga || 0);
-  };
-
-  const handleSubmitDetails = async () => {
-    // Simple validation - ensure all required fields are filled
-    for (let i = 0; i < buyerDetails.length; i++) {
-      const detail = buyerDetails[i];
-      if (!detail.nama || detail.nama.trim() === '') {
-        alert(`Mohon isi nama untuk tiket ${i + 1}`);
-        return;
-      }
-      if (!detail.email || detail.email.trim() === '') {
-        alert(`Mohon isi email untuk tiket ${i + 1}`);
-        return;
-      }
-      if (!detail.nomorTelepon || detail.nomorTelepon.trim() === '') {
-        alert(`Mohon isi nomor telepon untuk tiket ${i + 1}`);
-        return;
-      }
+    if (!formData.emailPembeli.trim()) {
+      setError('Email pembeli wajib diisi');
+      return;
     }
-
-    setSubmittingDetails(true);
-    try {
-      console.log('Sending buyerDetails:', buyerDetails); // Debug log
-      await api.put(`/orders/${params.id}/buyer-details`, { buyerDetails });
-      // Refresh order
-      await fetchOrder();
-    } catch (error: any) {
-      console.error('Error saving buyer details:', error.response?.data); // Debug log
-      alert(error.response?.data?.message || 'Gagal menyimpan detail pembeli. Silakan coba lagi.');
-    } finally {
-      setSubmittingDetails(false);
-    }
-  };
-
-  const handlePayment = async () => {
-    if (!snapReady || !window.snap) {
-      alert('Snap belum siap, mohon tunggu sebentar...');
+    if (!formData.nomorTelepon.trim()) {
+      setError('Nomor telepon wajib diisi');
       return;
     }
 
-    setProcessing(true);
+    setSubmitting(true);
 
     try {
-      const response = await api.post('/payment/create', {
-        orderId: order!._id,
+      // Update order with buyer details
+      await api.put(`/orders/${params.id}`, {
+        namaPembeli: formData.namaPembeli,
+        emailPembeli: formData.emailPembeli,
+        nomorTelepon: formData.nomorTelepon,
       });
 
-      if (!response.data.token) {
-        throw new Error('Token tidak ditemukan dalam response');
-      }
-
-      // Buka Snap popup
-      window.snap.pay(response.data.token, {
-        onSuccess: function(result: any) {
-          alert('Pembayaran berhasil! Tiket Anda sudah tersedia.');
-          router.push('/my-tickets');
-        },
-        onPending: function(result: any) {
-          alert('Pembayaran sedang diproses. Silakan selesaikan pembayaran Anda.');
-          setProcessing(false);
-        },
-        onError: function(result: any) {
-          alert('Pembayaran gagal. Silakan coba lagi atau gunakan metode pembayaran lain.');
-          setProcessing(false);
-        },
-        onClose: function() {
-          setProcessing(false);
-        }
+      // Proceed to payment
+      // For now, just mark as paid (in real implementation, this would integrate with payment gateway)
+      const paymentResponse = await api.put(`/orders/${params.id}/pay`, {
+        transactionId: `TXN-${Date.now()}`,
       });
-    } catch (error: any) {
-      alert(error.response?.data?.message || 'Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.');
-      setProcessing(false);
+
+      router.push(`/my-orders`);
+    } catch (err: unknown) {
+      console.error('Error during checkout:', err);
+      const error = err as { response?: { data?: { message?: string } } };
+      setError(error.response?.data?.message || 'Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -323,7 +141,7 @@ export default function CheckoutPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">Memuat detail pesanan...</p>
+          <p className="mt-4 text-gray-600">Memuat checkout...</p>
         </div>
       </div>
     );
@@ -333,283 +151,155 @@ export default function CheckoutPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-xl text-gray-600">Pesanan tidak ditemukan</p>
+          <p className="text-xl text-gray-600">Order tidak ditemukan</p>
         </div>
       </div>
     );
   }
 
   return (
-    <>
-      {/* Midtrans Snap Script */}
-      <Script
-        src="https://app.midtrans.com/snap/snap.js"
-        data-client-key={process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY}
-        onLoad={() => setSnapReady(true)}
-        strategy="lazyOnload"
-      />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 py-8 pt-24">
+      <div className="container mx-auto px-4 max-w-4xl">
+        {/* Back Button */}
+        <button
+          onClick={() => router.back()}
+          className="mb-6 flex items-center gap-2 text-gray-600 hover:text-blue-600 transition font-medium"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Kembali
+        </button>
 
-      <div className="min-h-screen bg-gray-50 py-8">
-        <div className="container mx-auto px-4 max-w-3xl">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Header */}
-          <div className="bg-blue-600 text-white p-6">
-            <h1 className="text-2xl font-bold text-white">Ringkasan Pesanan</h1>
-            <p className="text-blue-100">Silakan cek kembali detail pesanan Anda</p>
-          </div>
+        <div className="grid lg:grid-cols-2 gap-8">
+          {/* Order Summary */}
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Ringkasan Pesanan</h2>
 
-          <div className="p-6">
             {/* Event Info */}
-            <div className="mb-6 pb-6 border-b">
-              <h2 className="font-bold text-lg mb-4 text-gray-900">Detail Event</h2>
+            <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4 mb-6">
               <div className="flex gap-4">
                 <img
                   src={order.event.gambar}
                   alt={order.event.nama}
-                  className="w-32 h-32 object-cover rounded-lg"
+                  className="w-20 h-20 object-cover rounded-lg"
                   onError={(e) => {
                     e.currentTarget.src = '/images/default-event.jpg';
                   }}
                 />
-                <div>
-                  <h3 className="font-bold text-xl mb-2 text-gray-900">{order.event.nama}</h3>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <p>📅 {formatTanggal(order.event.tanggal)}</p>
-                    <p>🕐 {order.event.waktu}</p>
-                    <p>📍 {order.event.lokasi}</p>
-                  </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-900 text-lg">{order.event.nama}</h3>
+                  <p className="text-gray-600 text-sm">{formatTanggal(order.event.tanggal)}</p>
+                  <p className="text-gray-600 text-sm">{order.event.waktu} • {order.event.lokasi}</p>
                 </div>
               </div>
             </div>
 
-            {/* Buyer Info */}
-            <div className="mb-6 pb-6 border-b">
-              <h2 className="font-bold text-lg mb-4 text-gray-900">Informasi Pembeli</h2>
-              {order.buyerDetails && order.buyerDetails.length > 0 ? (
-                // Display buyer details
-                <div className="space-y-4">
-                  <div className="bg-green-50 border border-green-200 p-3 rounded-lg mb-4">
-                    <p className="text-green-800 text-sm">
-                      ✅ Detail pembeli telah disimpan
-                    </p>
+            {/* Ticket Details */}
+            <div className="space-y-3 mb-6">
+              <h4 className="font-semibold text-gray-900">Detail Tiket</h4>
+              {order.items.map((item, index) => (
+                <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100">
+                  <div>
+                    <p className="font-medium text-gray-900">{item.namaTipe}</p>
+                    <p className="text-sm text-gray-600">{item.jumlah} tiket × {formatHarga(item.hargaSatuan)}</p>
                   </div>
-                  {order.buyerDetails.map((detail, index) => (
-                    <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-semibold mb-2 text-gray-900">Tiket #{index + 1}</h3>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-600">Nama</p>
-                          <p className="font-semibold text-gray-900">{detail.nama}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Email</p>
-                          <p className="font-semibold text-gray-900">{detail.email}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Nomor Telepon</p>
-                          <p className="font-semibold text-gray-900">{detail.nomorTelepon}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  <p className="font-semibold text-gray-900">{formatHarga(item.subtotal)}</p>
                 </div>
-              ) : buyerDetails.length > 0 ? (
-                // Form to input buyer details
-                <div className="space-y-6">
-                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg">
-                    <p className="text-yellow-800 text-sm">
-                      ⚠️ Silakan lengkapi detail pembeli untuk setiap tiket sebelum melanjutkan pembayaran
-                    </p>
-                    {hasUsedAccountDetails && (
-                      <p className="text-red-700 text-sm mt-1">
-                        ⚠️ Anda sudah pernah menggunakan detail akun untuk pembelian sebelumnya. Opsi "Gunakan detail dari akun saya" tidak tersedia.
-                      </p>
-                    )}
-                    {!hasUsedAccountDetails && (
-                      <p className="text-blue-700 text-sm mt-1">
-                        💡 Opsi "Gunakan detail dari akun saya" hanya bisa digunakan untuk 1 tiket per pesanan dan tidak bisa digunakan lagi untuk pembelian selanjutnya.
-                      </p>
-                    )}
-                  </div>
-                  {buyerDetails.map((detail, index) => (
-                    <div key={index} className="bg-gray-50 p-4 rounded-lg">
-                      <h3 className="font-semibold mb-4 text-gray-900">Detail Pembeli Tiket #{index + 1}</h3>
-                      <div className="mb-4">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={detail.useAccountDetails || false}
-                            onChange={(e) => updateBuyerDetail(index, 'useAccountDetails', e.target.checked)}
-                            disabled={hasUsedAccountDetails || (!detail.useAccountDetails && buyerDetails.some(d => d.useAccountDetails))}
-                            className="mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                          />
-                          <span className={`text-sm ${hasUsedAccountDetails || (!detail.useAccountDetails && buyerDetails.some(d => d.useAccountDetails)) ? 'text-gray-500' : 'text-gray-700'}`}>
-                            Gunakan detail dari akun saya
-                            {hasUsedAccountDetails && (
-                              <span className="text-red-500 ml-1">(sudah digunakan sebelumnya)</span>
-                            )}
-                            {!hasUsedAccountDetails && !detail.useAccountDetails && buyerDetails.some(d => d.useAccountDetails) && (
-                              <span className="text-orange-500 ml-1">(sudah digunakan untuk tiket lain)</span>
-                            )}
-                          </span>
-                        </label>
-                        {!hasUsedAccountDetails && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            * Hanya bisa digunakan untuk 1 tiket per pesanan dan tidak bisa digunakan lagi untuk pembelian selanjutnya
-                          </p>
-                        )}
-                        {hasUsedAccountDetails && (
-                          <p className="text-xs text-red-500 mt-1">
-                            * Opsi ini tidak tersedia karena sudah pernah digunakan untuk pembelian sebelumnya
-                          </p>
-                        )}
-                      </div>
-                      <div className="grid md:grid-cols-3 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-900 mb-1">Nama</label>
-                          <input
-                            type="text"
-                            value={detail.nama}
-                            onChange={(e) => updateBuyerDetail(index, 'nama', e.target.value)}
-                            disabled={detail.useAccountDetails}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            placeholder="Masukkan nama lengkap"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-900 mb-1">Email</label>
-                          <input
-                            type="email"
-                            value={detail.email}
-                            onChange={(e) => updateBuyerDetail(index, 'email', e.target.value)}
-                            disabled={detail.useAccountDetails}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            placeholder="Masukkan email"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-900 mb-1">Nomor Telepon</label>
-                          <input
-                            type="tel"
-                            value={detail.nomorTelepon}
-                            onChange={(e) => updateBuyerDetail(index, 'nomorTelepon', e.target.value)}
-                            disabled={detail.useAccountDetails}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                            placeholder="Masukkan nomor telepon"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <button
-                    onClick={handleSubmitDetails}
-                    disabled={submittingDetails}
-                    className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                  >
-                    {submittingDetails ? 'Menyimpan...' : 'Simpan Detail Pembeli'}
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-gray-50 p-4 rounded-lg text-center">
-                  <p className="text-gray-600">Memuat detail pembeli...</p>
-                </div>
-              )}
+              ))}
             </div>
 
-            {/* Promo Code */}
-            {order.status === 'pending' && (
-              <div className="mb-6 pb-6 border-b">
-                <PromoCodeInput
-                  onPromoCodeApplied={handlePromoCodeApplied}
-                  onPromoCodeRemoved={handlePromoCodeRemoved}
-                  orderTotal={order.totalHarga}
-                  eventId={order.event._id}
-                  appliedPromoCode={appliedPromoCode}
-                />
+            {/* Total */}
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex justify-between items-center text-xl font-bold">
+                <span>Total Pembayaran</span>
+                <span className="text-blue-600">{formatHarga(order.totalHarga)}</span>
               </div>
-            )}
-
-            {/* Payment Summary */}
-            <div className="mb-6">
-              <h2 className="font-bold text-lg mb-4 text-gray-900">Rincian Pembayaran</h2>
-              <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-900">Harga Tiket x {order.jumlahTiket}</span>
-                  <span className="font-semibold text-gray-900">{formatHarga(order.totalHarga)}</span>
-                </div>
-                {appliedPromoCode && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Diskon ({appliedPromoCode.code})</span>
-                    <span className="font-semibold">-{formatHarga(order.discountAmount || 0)}</span>
-                  </div>
-                )}
-                <div className="border-t pt-2 flex justify-between items-center">
-                  <span className="text-lg font-bold text-gray-900">Total Pembayaran</span>
-                  <span className="text-2xl font-bold text-blue-600">
-                    {formatHarga(currentTotal)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Status */}
-            {order.status === 'pending' && (
-              <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-6">
-                <p className="text-yellow-800">
-                  ⏳ Pesanan Anda menunggu pembayaran
-                </p>
-              </div>
-            )}
-
-            {order.status === 'paid' && (
-              <div className="bg-green-50 border border-green-200 p-4 rounded-lg mb-6">
-                <p className="text-green-800">
-                  ✅ Pembayaran berhasil! Tiket Anda sudah tersedia
-                </p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex gap-4">
-              {order.status === 'pending' && (
-                <>
-                  {!isBuyerDetailsComplete() && buyerDetails.length > 0 && (
-                    <div className="flex-1 bg-gray-300 text-gray-500 py-3 rounded-lg font-medium text-center">
-                      Lengkapi detail pembeli terlebih dahulu
-                    </div>
-                  )}
-                  {isBuyerDetailsComplete() && (
-                    <button
-                      onClick={handlePayment}
-                      disabled={processing}
-                      className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                    >
-                      {processing ? 'Memproses...' : 'Bayar Sekarang'}
-                    </button>
-                  )}
-                </>
-              )}
-
-              {order.status === 'paid' && (
-                <button
-                  onClick={() => router.push('/my-tickets')}
-                  className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition font-medium"
-                >
-                  Lihat Tiket Saya
-                </button>
-              )}
-
-              <button
-                onClick={() => router.push('/')}
-                className="flex-1 bg-gray-200 text-gray-800 py-3 rounded-lg hover:bg-gray-300 transition font-medium"
-              >
-                Kembali ke Beranda
-              </button>
             </div>
           </div>
+
+          {/* Checkout Form */}
+          <div className="bg-white rounded-2xl shadow-xl p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Informasi Pembeli</h2>
+
+            {error && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 text-sm border border-red-200">
+                {error}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nama Lengkap *
+                </label>
+                <input
+                  type="text"
+                  value={formData.namaPembeli}
+                  onChange={(e) => setFormData({ ...formData, namaPembeli: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Masukkan nama lengkap"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={formData.emailPembeli}
+                  onChange={(e) => setFormData({ ...formData, emailPembeli: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Masukkan alamat email"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Nomor Telepon *
+                </label>
+                <input
+                  type="tel"
+                  value={formData.nomorTelepon}
+                  onChange={(e) => setFormData({ ...formData, nomorTelepon: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Masukkan nomor telepon"
+                  required
+                />
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h4 className="font-semibold text-blue-900 mb-2">Pembayaran</h4>
+                <p className="text-sm text-blue-700 mb-3">
+                  Untuk demonstrasi, sistem akan otomatis memproses pembayaran setelah Anda mengisi data pembeli.
+                </p>
+                <p className="text-xs text-blue-600">
+                  Dalam implementasi nyata, di sini akan ada integrasi dengan gateway pembayaran seperti Midtrans.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className={`w-full py-4 rounded-xl font-bold text-lg shadow-lg transition transform hover:-translate-y-1 ${
+                  !submitting
+                    ? 'bg-green-600 text-white hover:bg-green-700 shadow-green-200'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                {submitting ? 'Memproses Pembayaran...' : 'Bayar Sekarang'}
+              </button>
+            </form>
+
+            <p className="text-xs text-gray-500 text-center mt-4">
+              Dengan menyelesaikan pembayaran, Anda menyetujui syarat & ketentuan yang berlaku.
+            </p>
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }

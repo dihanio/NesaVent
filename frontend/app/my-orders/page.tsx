@@ -23,6 +23,7 @@ interface Order {
     waktu: string;
     lokasi: string;
     gambar: string;
+    slug: string;
   };
   items?: OrderItem[];
   jumlahTiket?: number;
@@ -242,7 +243,7 @@ export default function MyOrdersPage() {
 
                     {order.status === 'expired' && (
                       <button
-                        onClick={() => router.push(`/events/${order.event._id}`)}
+                        onClick={() => router.push(`/events/${order.event.slug}`)}
                         className="flex-1 bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition font-medium"
                       >
                         Pesan Lagi
@@ -250,7 +251,7 @@ export default function MyOrdersPage() {
                     )}
 
                     <button
-                      onClick={() => router.push(`/events/${order.event._id}`)}
+                      onClick={() => router.push(`/events/${order.event.slug}`)}
                       className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
                     >
                       Detail Event

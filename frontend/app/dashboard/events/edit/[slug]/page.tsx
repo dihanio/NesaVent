@@ -41,11 +41,11 @@ export default function EditEventPage() {
       return;
     }
     fetchEvent();
-  }, [params.id]);
+  }, [params.slug]);
 
   const fetchEvent = async () => {
     try {
-      const response = await api.get(`/events/${params.id}`);
+      const response = await api.get(`/events/${params.slug}`);
       const event = response.data;
       
       // Format tanggal untuk input type="date"
@@ -162,7 +162,7 @@ export default function EditEventPage() {
         }))
       };
 
-      await api.put(`/events/${params.id}`, dataToSend);
+      await api.put(`/events/${params.slug}`, dataToSend);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Gagal mengupdate event');
@@ -177,7 +177,7 @@ export default function EditEventPage() {
     }
 
     try {
-      await api.delete(`/events/${params.id}`);
+      await api.delete(`/events/${params.slug}`);
       router.push('/dashboard');
     } catch (err: any) {
       alert(err.response?.data?.message || 'Gagal menghapus event');

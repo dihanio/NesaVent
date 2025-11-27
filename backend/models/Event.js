@@ -36,6 +36,11 @@ const ticketTypeSchema = new mongoose.Schema({
   akhirJual: {
     type: Date,
     default: null // null = sampai event dimulai
+  },
+  allowedRoles: {
+    type: [String],
+    enum: ['user', 'mahasiswa', 'mitra', 'admin'],
+    default: ['user', 'mahasiswa', 'mitra', 'admin'] // default: semua role bisa beli
   }
 }, { _id: true });
 
@@ -43,6 +48,12 @@ const eventSchema = new mongoose.Schema({
   nama: {
     type: String,
     required: [true, 'Nama event wajib diisi'],
+    trim: true
+  },
+  slug: {
+    type: String,
+    unique: true,
+    lowercase: true,
     trim: true
   },
   deskripsi: {
@@ -115,11 +126,15 @@ const eventSchema = new mongoose.Schema({
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
+  },
+  views: {
+    type: Number,
+    default: 0
   }
 });
 
 // Virtual untuk total stok semua tipe tiket
-eventSchema.virtual('totalStok').get(function() {
+eventSchema.virtual('totalStok').get(function () {
   if (this.tiketTersedia && this.tiketTersedia.length > 0) {
     return this.tiketTersedia.reduce((total, tiket) => total + tiket.stok, 0);
   }
@@ -127,7 +142,7 @@ eventSchema.virtual('totalStok').get(function() {
 });
 
 // Virtual untuk total stok tersisa
-eventSchema.virtual('totalStokTersisa').get(function() {
+eventSchema.virtual('totalStokTersisa').get(function () {
   if (this.tiketTersedia && this.tiketTersedia.length > 0) {
     return this.tiketTersedia.reduce((total, tiket) => total + tiket.stokTersisa, 0);
   }

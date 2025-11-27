@@ -51,6 +51,7 @@ interface Order {
 interface Event {
   _id: string;
   nama: string;
+  slug: string;
   tanggal: string;
   lokasi: string;
   kategori: string;
@@ -201,11 +202,11 @@ export default function DashboardPage() {
     }
   };
 
-  const handleDeleteEvent = async (id: string) => {
+  const handleDeleteEvent = async (slug: string) => {
     if (!confirm('Yakin ingin menghapus event ini?')) return;
 
     try {
-      await api.delete(`/events/${id}`);
+      await api.delete(`/events/${slug}`);
       fetchEvents();
     } catch (error: any) {
       alert(error.response?.data?.message || 'Gagal menghapus event');
@@ -221,11 +222,11 @@ export default function DashboardPage() {
     }
   };
 
-  const handleSubmitEvent = async (id: string) => {
+  const handleSubmitEvent = async (slug: string) => {
     if (!confirm('Ajukan event ini untuk verifikasi admin?')) return;
 
     try {
-      const response = await api.put(`/admin/events/${id}/submit`);
+      const response = await api.put(`/admin/events/${slug}/submit`);
       alert(response.data.message);
       fetchEvents();
     } catch (error: any) {
@@ -858,7 +859,7 @@ export default function DashboardPage() {
                         <div className="flex gap-2 flex-wrap">
                           {event.status === 'draft' && (
                             <button
-                              onClick={() => handleSubmitEvent(event._id)}
+                              onClick={() => handleSubmitEvent(event.slug)}
                               className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition font-semibold text-xs flex items-center gap-1"
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -869,7 +870,7 @@ export default function DashboardPage() {
                           )}
                           {(event.status === 'aktif' || event.status === 'pending') && (
                             <Link
-                              href={`/dashboard/events/analytics/${event._id}`}
+                              href={`/dashboard/events/analytics/${event.slug}`}
                               className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition font-semibold text-xs"
                             >
                               Analitik
@@ -877,14 +878,14 @@ export default function DashboardPage() {
                           )}
                           {(event.status === 'draft' || event.status === 'ditolak') && (
                             <Link
-                              href={`/dashboard/events/edit/${event._id}`}
+                              href={`/dashboard/events/edit/${event.slug}`}
                               className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition font-semibold text-xs"
                             >
                               Edit
                             </Link>
                           )}
                           <button
-                            onClick={() => handleDeleteEvent(event._id)}
+                            onClick={() => handleDeleteEvent(event.slug)}
                             className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-semibold text-xs"
                           >
                             Hapus
@@ -963,7 +964,7 @@ export default function DashboardPage() {
                   <div className="flex flex-wrap gap-2">
                     {event.status === 'draft' && (
                       <button
-                        onClick={() => handleSubmitEvent(event._id)}
+                        onClick={() => handleSubmitEvent(event.slug)}
                         className="px-3 py-1.5 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition font-semibold text-xs"
                       >
                         Submit
@@ -971,7 +972,7 @@ export default function DashboardPage() {
                     )}
                     {(event.status === 'aktif' || event.status === 'pending') && (
                       <Link
-                        href={`/dashboard/events/analytics/${event._id}`}
+                        href={`/dashboard/events/analytics/${event.slug}`}
                         className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg hover:bg-yellow-200 transition font-semibold text-xs"
                       >
                         Analitik
@@ -979,14 +980,14 @@ export default function DashboardPage() {
                     )}
                     {(event.status === 'draft' || event.status === 'ditolak') && (
                       <Link
-                        href={`/dashboard/events/edit/${event._id}`}
+                        href={`/dashboard/events/edit/${event.slug}`}
                         className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition font-semibold text-xs"
                       >
                         Edit
                       </Link>
                     )}
                     <button
-                      onClick={() => handleDeleteEvent(event._id)}
+                      onClick={() => handleDeleteEvent(event.slug)}
                       className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition font-semibold text-xs"
                     >
                       Hapus
@@ -1279,7 +1280,7 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500 mt-1">{event.lokasi}</p>
                   </div>
                   <Link
-                    href={`/events/${event._id}`}
+                    href={`/events/${event.slug}`}
                     className="px-3 py-1 bg-green-600 text-white rounded text-xs font-semibold hover:bg-green-700 transition"
                   >
                     Lihat

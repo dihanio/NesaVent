@@ -49,15 +49,15 @@ const orderSchema = new mongoose.Schema({
   },
   namaPembeli: {
     type: String,
-    required: [true, 'Nama pembeli wajib diisi']
+    required: false // Made optional for initial order creation
   },
   emailPembeli: {
     type: String,
-    required: [true, 'Email pembeli wajib diisi']
+    required: false // Made optional for initial order creation
   },
   nomorTelepon: {
     type: String,
-    required: [true, 'Nomor telepon wajib diisi']
+    required: false // Made optional for initial order creation
   },
   status: {
     type: String,

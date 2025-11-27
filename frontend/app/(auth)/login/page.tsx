@@ -55,7 +55,7 @@ export default function LoginPage() {
           {/* Left Side - Image */}
           <div className="hidden md:block relative bg-blue-600">
             <img
-              src="/images/login-illustration.jpg"
+              src="https://images.unsplash.com/photo-1556761175-b413da4baf72?w=800&h=600&fit=crop"
               alt="Login Illustration"
               className="w-full h-full object-cover"
               onError={(e) => {

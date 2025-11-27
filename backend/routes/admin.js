@@ -82,11 +82,11 @@ router.get('/events', protect, protectAdmin, async (req, res) => {
 });
 
 // @desc    Delete event (admin only)
-// @route   DELETE /api/admin/events/:id
+// @route   DELETE /api/admin/events/:slug
 // @access  Private/Admin
-router.delete('/events/:id', protect, protectAdmin, async (req, res) => {
+router.delete('/events/:slug', protect, protectAdmin, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ slug: req.params.slug });
     if (!event) {
       return res.status(404).json({ message: 'Event tidak ditemukan' });
     }
@@ -190,11 +190,11 @@ router.get('/stats', protect, protectAdmin, async (req, res) => {
 });
 
 // @desc    Submit event untuk verifikasi (mitra only)
-// @route   PUT /api/admin/events/:id/submit
+// @route   PUT /api/admin/events/:slug/submit
 // @access  Private/Mitra
-router.put('/events/:id/submit', protect, protectMitra, async (req, res) => {
+router.put('/events/:slug/submit', protect, protectMitra, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ slug: req.params.slug });
     
     if (!event) {
       return res.status(404).json({ message: 'Event tidak ditemukan' });
@@ -262,11 +262,11 @@ router.get('/events/pending', protect, protectAdmin, async (req, res) => {
 });
 
 // @desc    Approve event (admin only)
-// @route   PUT /api/admin/events/:id/approve
+// @route   PUT /api/admin/events/:slug/approve
 // @access  Private/Admin
-router.put('/events/:id/approve', protect, protectAdmin, async (req, res) => {
+router.put('/events/:slug/approve', protect, protectAdmin, async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ slug: req.params.slug });
     
     if (!event) {
       return res.status(404).json({ message: 'Event tidak ditemukan' });
@@ -303,9 +303,9 @@ router.put('/events/:id/approve', protect, protectAdmin, async (req, res) => {
 });
 
 // @desc    Reject event (admin only)
-// @route   PUT /api/admin/events/:id/reject
+// @route   PUT /api/admin/events/:slug/reject
 // @access  Private/Admin
-router.put('/events/:id/reject', protect, protectAdmin, async (req, res) => {
+router.put('/events/:slug/reject', protect, protectAdmin, async (req, res) => {
   try {
     const { alasan } = req.body;
     
@@ -313,7 +313,7 @@ router.put('/events/:id/reject', protect, protectAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Alasan penolakan wajib diisi' });
     }
 
-    const event = await Event.findById(req.params.id);
+    const event = await Event.findOne({ slug: req.params.slug });
     
     if (!event) {
       return res.status(404).json({ message: 'Event tidak ditemukan' });

@@ -60,13 +60,13 @@ const createOrder = async (req, res) => {
     if (ticketSelections && Array.isArray(ticketSelections) && ticketSelections.length > 0) {
       for (const selection of ticketSelections) {
         const { ticketTypeId, quantity } = selection;
-        
+
         if (!ticketTypeId || !quantity || quantity <= 0) {
           return res.status(400).json({ message: 'Data tiket tidak valid' });
         }
 
         const ticketType = event.tiketTersedia.id(ticketTypeId);
-        
+
         if (!ticketType) {
           return res.status(404).json({ message: 'Tipe tiket tidak ditemukan' });
         }
@@ -78,6 +78,15 @@ const createOrder = async (req, res) => {
         }
         if (ticketType.akhirJual && new Date(ticketType.akhirJual) < now) {
           return res.status(400).json({ message: 'Penjualan tiket sudah berakhir' });
+        }
+
+        // Cek apakah role user diizinkan untuk membeli tiket ini
+        if (ticketType.allowedRoles && ticketType.allowedRoles.length > 0) {
+          if (!ticketType.allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({
+              message: `Tiket ${ticketType.nama} hanya dapat dibeli oleh ${ticketType.allowedRoles.join(', ')}`
+            });
+          }
         }
 
         // Cek stok tiket tipe ini
@@ -98,10 +107,10 @@ const createOrder = async (req, res) => {
             const item = order.items.find(i => i.tipeTiket.toString() === ticketTypeId);
             return sum + (item ? item.jumlah : 0);
           }, 0);
-          
+
           if (totalPurchased + quantity > ticketType.maxPembelianPerOrang) {
-            return res.status(400).json({ 
-              message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket ${ticketType.nama} per orang. Anda sudah membeli ${totalPurchased} tiket.` 
+            return res.status(400).json({
+              message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket ${ticketType.nama} per orang. Anda sudah membeli ${totalPurchased} tiket.`
             });
           }
         }
@@ -127,7 +136,7 @@ const createOrder = async (req, res) => {
       if (ticketTypeId) {
         // Single ticket type (legacy)
         const ticketType = event.tiketTersedia.id(ticketTypeId);
-        
+
         if (!ticketType) {
           return res.status(404).json({ message: 'Tipe tiket tidak ditemukan' });
         }
@@ -139,6 +148,15 @@ const createOrder = async (req, res) => {
         }
         if (ticketType.akhirJual && new Date(ticketType.akhirJual) < now) {
           return res.status(400).json({ message: 'Penjualan tiket sudah berakhir' });
+        }
+
+        // Cek apakah role user diizinkan untuk membeli tiket ini
+        if (ticketType.allowedRoles && ticketType.allowedRoles.length > 0) {
+          if (!ticketType.allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({
+              message: `Tiket ${ticketType.nama} hanya dapat dibeli oleh ${ticketType.allowedRoles.join(', ')}`
+            });
+          }
         }
 
         // Cek stok tiket tipe ini
@@ -159,10 +177,10 @@ const createOrder = async (req, res) => {
             const item = order.items.find(i => i.tipeTiket.toString() === ticketTypeId);
             return sum + (item ? item.jumlah : 0);
           }, 0);
-          
+
           if (totalPurchased + jumlahTiket > ticketType.maxPembelianPerOrang) {
-            return res.status(400).json({ 
-              message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket per orang. Anda sudah membeli ${totalPurchased} tiket.` 
+            return res.status(400).json({
+              message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket per orang. Anda sudah membeli ${totalPurchased} tiket.`
             });
           }
         }
@@ -292,7 +310,7 @@ const updateOrderToPaid = async (req, res) => {
       }
 
       // Create notification for event owner (mitra)
-      const totalTiket = order.items && order.items.length > 0 
+      const totalTiket = order.items && order.items.length > 0
         ? order.items.reduce((sum, item) => sum + item.jumlah, 0)
         : order.jumlahTiket;
 
@@ -307,7 +325,7 @@ const updateOrderToPaid = async (req, res) => {
       // Generate tiket
       const tickets = [];
       const jumlahTiketTotal = totalTiket;
-      
+
       for (let i = 0; i < jumlahTiketTotal; i++) {
         const kodeTicket = `TIX-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
         const qrCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${kodeTicket}`;
@@ -333,10 +351,47 @@ const updateOrderToPaid = async (req, res) => {
   }
 };
 
+// @desc    Update order buyer details
+// @route   PUT /api/orders/:id
+// @access  Private
+const updateOrderDetails = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order tidak ditemukan' });
+    }
+
+    // Check if order belongs to current user
+    if (order.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Tidak memiliki akses ke order ini' });
+    }
+
+    // Only allow updates for pending orders
+    if (order.status !== 'pending') {
+      return res.status(400).json({ message: 'Order tidak dapat diubah' });
+    }
+
+    const { namaPembeli, emailPembeli, nomorTelepon } = req.body;
+
+    // Update buyer details
+    if (namaPembeli !== undefined) order.namaPembeli = namaPembeli;
+    if (emailPembeli !== undefined) order.emailPembeli = emailPembeli;
+    if (nomorTelepon !== undefined) order.nomorTelepon = nomorTelepon;
+
+    const updatedOrder = await order.save();
+
+    res.json(updatedOrder);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getAllOrders,
   getMyOrders,
   getOrderById,
   updateOrderToPaid,
+  updateOrderDetails,
 };

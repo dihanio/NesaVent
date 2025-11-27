@@ -1,10 +1,29 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
+// Fungsi untuk generate slug
+function slugify(text) {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')           // Replace spaces with -
+    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+    .replace(/\-\-+/g, '-')         // Replace multiple - with single -
+    .replace(/^-+/, '')             // Trim - from start of text
+    .replace(/-+$/, '');            // Trim - from end of text
+}
+
 const userSchema = new mongoose.Schema({
   nama: {
     type: String,
     required: [true, 'Nama wajib diisi'],
+    trim: true
+  },
+  slug: {
+    type: String,
+    unique: true,
+    lowercase: true,
     trim: true
   },
   email: {
@@ -25,12 +44,36 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'mitra', 'admin'],
+    enum: ['user', 'mahasiswa', 'mitra', 'admin'],
     default: 'user'
   },
   organisasi: {
     type: String,
     trim: true
+  },
+  avatar: {
+    type: String,
+    default: 'https://www.gravatar.com/avatar/?d=mp'
+  },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationCode: {
+    type: String,
+    default: null
+  },
+  verificationCodeExpires: {
+    type: Date,
+    default: null
+  },
+  resetPasswordCode: {
+    type: String,
+    default: null
+  },
+  resetPasswordCodeExpires: {
+    type: Date,
+    default: null
   },
   createdAt: {
     type: Date,
@@ -38,18 +81,54 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Hash password sebelum save
-userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    next();
+// Pre-save hook untuk generate slug
+userSchema.pre('save', async function() {
+  if (this.isModified('nama') || this.isNew) {
+    let baseSlug = slugify(this.nama);
+    let slug = baseSlug;
+    let counter = 1;
+
+    // Check if slug already exists
+    while (true) {
+      const existingUser = await mongoose.models.User.findOne({ slug });
+      if (!existingUser || existingUser._id.toString() === this._id.toString()) {
+        this.slug = slug;
+        break;
+      } else {
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
   }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+});
+
+// Pre-save hook untuk hash password
+userSchema.pre('save', async function() {
+  console.log(`[USER MODEL] Pre-save hook triggered for user: ${this.email}`);
+  console.log(`[USER MODEL] Password modified: ${this.isModified('password')}`);
+
+  if (this.isModified('password')) {
+    console.log(`[USER MODEL] Hashing password for: ${this.email}`);
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(this.password, salt);
+    this.password = hashedPassword;
+    console.log(`[USER MODEL] Password hashed successfully for: ${this.email}`);
+  } else {
+    console.log(`[USER MODEL] Password not modified, skipping hash for: ${this.email}`);
+  }
 });
 
 // Method untuk cek password
-userSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+userSchema.methods.matchPassword = async function (enteredPassword) {
+  console.log(`[USER MODEL] Checking password for user: ${this.email}`);
+  console.log(`[USER MODEL] Stored hash starts with: ${this.password.substring(0, 10)}...`);
+  console.log(`[USER MODEL] Entered password starts with: ${enteredPassword.substring(0, 3)}...`);
+
+  const result = await bcrypt.compare(enteredPassword, this.password);
+
+  console.log(`[USER MODEL] Password match result: ${result}`);
+
+  return result;
 };
 
 module.exports = mongoose.model('User', userSchema);
