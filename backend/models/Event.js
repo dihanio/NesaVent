@@ -41,6 +41,10 @@ const ticketTypeSchema = new mongoose.Schema({
     type: [String],
     enum: ['user', 'mahasiswa', 'mitra', 'admin'],
     default: ['user', 'mahasiswa', 'mitra', 'admin'] // default: semua role bisa beli
+  },
+  khususMahasiswa: {
+    type: Boolean,
+    default: false // Jika true, enforce maxPembelianPerOrang per event untuk role 'user' (mahasiswa)
   }
 }, { _id: true });
 

@@ -466,4 +466,119 @@ router.put('/withdrawals/:id/reject', protect, protectAdmin, async (req, res) =>
   }
 });
 
+// @desc    Get pending student verifications (admin only)
+// @route   GET /api/admin/student-verifications
+// @access  Private/Admin
+router.get('/student-verifications', protect, protectAdmin, async (req, res) => {
+  try {
+    const pendingUsers = await User.find({
+      studentVerificationStatus: 'pending'
+    })
+    .select('nama email nim programStudi fakultas ktm studentVerificationStatus studentVerificationNote createdAt')
+    .sort({ createdAt: -1 });
+
+    res.json(pendingUsers);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @desc    Approve student verification (admin only)
+// @route   PUT /api/admin/student-verifications/:userId/approve
+// @access  Private/Admin
+router.put('/student-verifications/:userId/approve', protect, protectAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { note } = req.body;
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    if (user.studentVerificationStatus !== 'pending') {
+      return res.status(400).json({ message: 'User tidak dalam status pending verifikasi' });
+    }
+
+    user.studentVerificationStatus = 'approved';
+    user.studentVerificationNote = note || 'Verifikasi mahasiswa disetujui';
+
+    await user.save();
+
+    // Create notification for user
+    await createNotification(
+      user._id,
+      'student_verification_approved',
+      '✅ Verifikasi Mahasiswa Disetujui',
+      'Selamat! Data mahasiswa Anda telah diverifikasi. Anda sekarang dapat membeli tiket khusus mahasiswa.',
+      { verificationStatus: 'approved' }
+    );
+
+    res.json({
+      message: 'Verifikasi mahasiswa berhasil disetujui',
+      user: {
+        _id: user._id,
+        nama: user.nama,
+        email: user.email,
+        studentVerificationStatus: user.studentVerificationStatus,
+        studentVerificationNote: user.studentVerificationNote
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// @desc    Reject student verification (admin only)
+// @route   PUT /api/admin/student-verifications/:userId/reject
+// @access  Private/Admin
+router.put('/student-verifications/:userId/reject', protect, protectAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { note } = req.body;
+
+    if (!note || note.trim().length === 0) {
+      return res.status(400).json({ message: 'Alasan penolakan wajib diisi' });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User tidak ditemukan' });
+    }
+
+    if (user.studentVerificationStatus !== 'pending') {
+      return res.status(400).json({ message: 'User tidak dalam status pending verifikasi' });
+    }
+
+    user.studentVerificationStatus = 'rejected';
+    user.studentVerificationNote = note;
+
+    await user.save();
+
+    // Create notification for user
+    await createNotification(
+      user._id,
+      'student_verification_rejected',
+      '❌ Verifikasi Mahasiswa Ditolak',
+      `Maaf, verifikasi mahasiswa Anda ditolak. Alasan: ${note}`,
+      { verificationStatus: 'rejected' }
+    );
+
+    res.json({
+      message: 'Verifikasi mahasiswa ditolak',
+      user: {
+        _id: user._id,
+        nama: user.nama,
+        email: user.email,
+        studentVerificationStatus: user.studentVerificationStatus,
+        studentVerificationNote: user.studentVerificationNote
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
 module.exports = router;

@@ -1,6 +1,33 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const multer = require('multer');
+const path = require('path');
 const { sendVerificationCode, sendPasswordResetCode } = require('../utils/emailService');
+
+// Multer configuration for KTM upload
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/ktm/');
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'ktm-' + req.user._id + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const uploadKTM = multer({
+  storage: storage,
+  limits: {
+    fileSize: 2 * 1024 * 1024 // 2MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('File harus berupa gambar'), false);
+    }
+  }
+});
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -115,6 +142,15 @@ const getUserProfile = async (req, res) => {
         nomorTelepon: user.nomorTelepon,
         role: user.role,
         organisasi: user.organisasi,
+        // Student fields
+        nim: user.nim,
+        programStudi: user.programStudi,
+        fakultas: user.fakultas,
+        ktm: user.ktm,
+        studentVerificationStatus: user.studentVerificationStatus,
+        studentVerificationNote: user.studentVerificationNote,
+        isStudentVerified: user.studentVerificationStatus === 'approved', // Backward compatibility
+        angkatan: user.angkatan, // Virtual field
         createdAt: user.createdAt,
       });
     } else {
@@ -136,7 +172,7 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ message: 'User tidak ditemukan' });
     }
 
-    const { nama, email, nomorTelepon, organisasi } = req.body;
+    const { nama, email, nomorTelepon, organisasi, nim, programStudi, fakultas } = req.body;
 
     // Cek apakah email baru sudah digunakan user lain
     if (email && email !== user.email) {
@@ -154,6 +190,29 @@ const updateProfile = async (req, res) => {
       user.organisasi = organisasi !== undefined ? organisasi : user.organisasi;
     }
 
+    // Update student fields if user is mahasiswa
+    if (user.role === 'user' || user.role === 'mahasiswa') {
+      // Prevent updating student data if already approved
+      if (user.studentVerificationStatus === 'approved') {
+        return res.status(400).json({ message: 'Data mahasiswa sudah terverifikasi dan tidak dapat diubah' });
+      }
+
+      user.nim = nim !== undefined ? nim : user.nim;
+      user.programStudi = programStudi !== undefined ? programStudi : user.programStudi;
+      user.fakultas = fakultas !== undefined ? fakultas : user.fakultas;
+
+      // Handle KTM file upload
+      if (req.file) {
+        user.ktm = req.file.filename;
+      }
+
+      // Set status to pending if all student data is complete and not already approved
+      if (user.nim && user.programStudi && user.fakultas && user.ktm &&
+          user.studentVerificationStatus !== 'approved') {
+        user.studentVerificationStatus = 'pending';
+      }
+    }
+
     const updatedUser = await user.save();
 
     res.json({
@@ -163,6 +222,13 @@ const updateProfile = async (req, res) => {
       nomorTelepon: updatedUser.nomorTelepon,
       role: updatedUser.role,
       organisasi: updatedUser.organisasi,
+      nim: updatedUser.nim,
+      programStudi: updatedUser.programStudi,
+      fakultas: updatedUser.fakultas,
+      ktm: updatedUser.ktm,
+      studentVerificationStatus: updatedUser.studentVerificationStatus,
+      studentVerificationNote: updatedUser.studentVerificationNote,
+      isStudentVerified: updatedUser.studentVerificationStatus === 'approved', // Backward compatibility
       createdAt: updatedUser.createdAt,
     });
   } catch (error) {
@@ -398,4 +464,5 @@ module.exports = {
   verifyCode,
   resendVerificationCode,
   resetPassword,
+  uploadKTM,
 };

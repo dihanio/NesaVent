@@ -17,6 +17,7 @@ interface TicketType {
 interface Event {
   _id: string;
   nama: string;
+  slug: string;
   deskripsi: string;
   tanggal: string;
   waktu: string;
@@ -112,7 +113,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-blue-50 to-gray-100">
       {/* Hero Carousel */}
       <div className="container mx-auto px-4 pt-24 pb-8">
         <div className="relative w-full aspect-video md:aspect-21/9 overflow-hidden rounded-2xl shadow-2xl group">
@@ -129,7 +130,7 @@ export default function Home() {
                 alt={`Slide ${index + 1}`}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-8">
+              <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent flex items-end p-8">
                 <div className="text-white">
                   <h2 className="text-3xl md:text-5xl font-bold mb-2">Temukan Event Seru!</h2>
                   <p className="text-lg opacity-90">Jelajahi ribuan event menarik di sekitarmu</p>
@@ -413,7 +414,7 @@ export default function Home() {
         </section>
 
         {/* CTA Section */}
-        <section className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-3xl p-8 md:p-12 text-center text-white shadow-2xl relative overflow-hidden">
+        <section className="bg-linear-to-r from-blue-600 to-indigo-700 rounded-3xl p-8 md:p-12 text-center text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
           <div className="relative z-10">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Ingin Menjelajahi Lebih Banyak?</h2>

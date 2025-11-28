@@ -108,10 +108,65 @@ const getSettings = async (req, res) => {
       settings = await Settings.create({ user: req.user._id });
     }
 
-    res.json(settings);
+    // Filter settings based on user role
+    const filteredSettings = filterSettingsByRole(settings, req.user.role);
+
+    res.json(filteredSettings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+};
+
+// Helper function to filter settings based on user role
+const filterSettingsByRole = (settings, role) => {
+  const baseSettings = {
+    _id: settings._id,
+    user: settings.user,
+    notifications: {
+      email: {},
+      push: {}
+    }
+  };
+
+  if (role === 'user') {
+    // User only gets notifications for event reminders and orders
+    baseSettings.notifications.email = {
+      eventReminder: settings.notifications.email.eventReminder || false,
+      newOrder: settings.notifications.email.newOrder || false
+    };
+    baseSettings.notifications.push = {
+      eventReminder: settings.notifications.push.eventReminder || false,
+      newOrder: settings.notifications.push.newOrder || false
+    };
+  } else if (role === 'mitra') {
+    // Mitra gets notifications for events, sales, and withdrawals, plus bank accounts and event defaults
+    baseSettings.notifications.email = {
+      eventApproved: settings.notifications.email.eventApproved || false,
+      eventRejected: settings.notifications.email.eventRejected || false,
+      newOrder: settings.notifications.email.newOrder || false,
+      withdrawalProcessed: settings.notifications.email.withdrawalProcessed || false,
+      withdrawalRejected: settings.notifications.email.withdrawalRejected || false
+    };
+    baseSettings.notifications.push = {
+      eventApproved: settings.notifications.push.eventApproved || false,
+      eventRejected: settings.notifications.push.eventRejected || false,
+      newOrder: settings.notifications.push.newOrder || false,
+      withdrawalProcessed: settings.notifications.push.withdrawalProcessed || false,
+      withdrawalRejected: settings.notifications.push.withdrawalRejected || false
+    };
+    baseSettings.bankAccounts = settings.bankAccounts || [];
+    baseSettings.eventDefaults = settings.eventDefaults || {
+      kategori: '',
+      lokasi: '',
+      durasi: 120,
+      reminderDays: 3
+    };
+  } else if (role === 'admin') {
+    // Admin gets all settings
+    return settings;
+  }
+
+  return baseSettings;
 };
 
 // @desc    Update notification preferences
@@ -121,28 +176,67 @@ const updateNotifications = async (req, res) => {
   try {
     const { email, push } = req.body;
 
+    // Validate that user can only update allowed notification types
+    const allowedEmailKeys = getAllowedNotificationKeys(req.user.role, 'email');
+    const allowedPushKeys = getAllowedNotificationKeys(req.user.role, 'push');
+
+    // Filter out unauthorized notification updates
+    const filteredEmail = email ? Object.keys(email).reduce((acc, key) => {
+      if (allowedEmailKeys.includes(key)) {
+        acc[key] = email[key];
+      }
+      return acc;
+    }, {}) : {};
+
+    const filteredPush = push ? Object.keys(push).reduce((acc, key) => {
+      if (allowedPushKeys.includes(key)) {
+        acc[key] = push[key];
+      }
+      return acc;
+    }, {}) : {};
+
     let settings = await Settings.findOne({ user: req.user._id });
 
     if (!settings) {
       settings = await Settings.create({ user: req.user._id });
     }
 
-    if (email) settings.notifications.email = { ...settings.notifications.email, ...email };
-    if (push) settings.notifications.push = { ...settings.notifications.push, ...push };
+    if (Object.keys(filteredEmail).length > 0) {
+      settings.notifications.email = { ...settings.notifications.email, ...filteredEmail };
+    }
+    if (Object.keys(filteredPush).length > 0) {
+      settings.notifications.push = { ...settings.notifications.push, ...filteredPush };
+    }
 
     await settings.save();
 
-    res.json({ message: 'Preferensi notifikasi berhasil diupdate', settings });
+    res.json({ message: 'Preferensi notifikasi berhasil diupdate', settings: filterSettingsByRole(settings, req.user.role) });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
 
+// Helper function to get allowed notification keys for a role
+const getAllowedNotificationKeys = (role, type) => {
+  if (role === 'user') {
+    return ['eventReminder', 'newOrder'];
+  } else if (role === 'mitra') {
+    return ['eventApproved', 'eventRejected', 'newOrder', 'withdrawalProcessed', 'withdrawalRejected'];
+  } else if (role === 'admin') {
+    return ['eventApproved', 'eventRejected', 'newOrder', 'withdrawalProcessed', 'withdrawalRejected', 'eventReminder'];
+  }
+  return [];
+};
+
 // @desc    Validate bank account (without saving)
 // @route   POST /api/settings/bank-accounts/validate
-// @access  Private
+// @access  Private (Mitra & Admin only)
 const validateBankAccountOnly = async (req, res) => {
   try {
+    // Only mitra and admin can validate bank accounts
+    if (req.user.role !== 'mitra' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya mitra yang dapat memvalidasi rekening bank' });
+    }
     const { bankName, accountNumber } = req.body;
 
     if (!bankName || !accountNumber) {
@@ -177,9 +271,14 @@ const validateBankAccountOnly = async (req, res) => {
 
 // @desc    Add bank account
 // @route   POST /api/settings/bank-accounts
-// @access  Private
+// @access  Private (Mitra & Admin only)
 const addBankAccount = async (req, res) => {
   try {
+    // Only mitra and admin can add bank accounts
+    if (req.user.role !== 'mitra' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya mitra yang dapat menambah rekening bank' });
+    }
+
     const { bankName, accountNumber, accountName, isPrimary } = req.body;
 
     if (!bankName || !accountNumber || !accountName) {
@@ -245,9 +344,13 @@ const addBankAccount = async (req, res) => {
 
 // @desc    Update bank account
 // @route   PUT /api/settings/bank-accounts/:id
-// @access  Private
+// @access  Private (Mitra & Admin only)
 const updateBankAccount = async (req, res) => {
   try {
+    // Only mitra and admin can manage bank accounts
+    if (req.user.role !== 'mitra' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya mitra yang dapat mengelola rekening bank' });
+    }
     const { bankName, accountNumber, accountName, isPrimary } = req.body;
 
     let settings = await Settings.findOne({ user: req.user._id });
@@ -282,9 +385,13 @@ const updateBankAccount = async (req, res) => {
 
 // @desc    Delete bank account
 // @route   DELETE /api/settings/bank-accounts/:id
-// @access  Private
+// @access  Private (Mitra & Admin only)
 const deleteBankAccount = async (req, res) => {
   try {
+    // Only mitra and admin can manage bank accounts
+    if (req.user.role !== 'mitra' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya mitra yang dapat mengelola rekening bank' });
+    }
     let settings = await Settings.findOne({ user: req.user._id });
 
     if (!settings) {
@@ -315,9 +422,13 @@ const deleteBankAccount = async (req, res) => {
 
 // @desc    Update email templates
 // @route   PUT /api/settings/email-templates
-// @access  Private/Mitra
+// @access  Private (Mitra & Admin only)
 const updateEmailTemplates = async (req, res) => {
   try {
+    // Only mitra and admin can update email templates
+    if (req.user.role !== 'mitra' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya mitra yang dapat mengatur template email' });
+    }
     const { orderConfirmation, eventReminder } = req.body;
 
     let settings = await Settings.findOne({ user: req.user._id });
@@ -350,9 +461,13 @@ const updateEmailTemplates = async (req, res) => {
 
 // @desc    Update event defaults
 // @route   PUT /api/settings/event-defaults
-// @access  Private/Mitra
+// @access  Private (Mitra & Admin only)
 const updateEventDefaults = async (req, res) => {
   try {
+    // Only mitra and admin can set event defaults
+    if (req.user.role !== 'mitra' && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Akses ditolak. Hanya mitra yang dapat mengatur default event' });
+    }
     const { kategori, lokasi, durasi, reminderDays } = req.body;
 
     let settings = await Settings.findOne({ user: req.user._id });

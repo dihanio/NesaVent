@@ -26,13 +26,18 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files from uploads directory
+app.use('/uploads', express.static('uploads'));
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/mitra', require('./routes/mitra'));
 app.use('/api/events', require('./routes/events'));
 app.use('/api/orders', require('./routes/orders'));
 app.use('/api/payment', require('./routes/payments'));
 app.use('/api/tickets', require('./routes/tickets'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/academic', require('./routes/academic'));
 app.use('/api/withdrawals', require('./routes/withdrawals'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/settings', require('./routes/settings'));

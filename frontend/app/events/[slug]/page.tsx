@@ -17,11 +17,13 @@ interface TicketType {
   mulaiJual?: string | null;
   akhirJual?: string | null;
   allowedRoles?: string[];
+  khususMahasiswa?: boolean;
 }
 
 interface Event {
   _id: string;
   nama: string;
+  slug: string;
   deskripsi: string;
   tanggal: string;
   waktu: string;
@@ -31,7 +33,7 @@ interface Event {
   stok: number;
   gambar: string;
   penyelenggara: string;
-  createdBy: string;
+  createdBy: { slug: string; };
   tiketTersedia?: TicketType[];
 }
 
@@ -138,6 +140,14 @@ export default function EventDetail() {
     const currentUser = authService.getCurrentUser();
     if (!currentUser) return true;
 
+    // Check if ticket is for students only
+    if (ticket.khususMahasiswa) {
+      // If user is not a student or not verified, they cannot buy
+      if (currentUser.role !== 'user' || currentUser.studentVerificationStatus !== 'approved') {
+        return false;
+      }
+    }
+
     if (!ticket.allowedRoles || ticket.allowedRoles.length === 0) return true;
 
     return ticket.allowedRoles.includes(currentUser.role);
@@ -152,8 +162,9 @@ export default function EventDetail() {
       return;
     }
 
+    const currentUser = authService.getCurrentUser();
+
     if (authService.isMitraOrAdmin()) {
-      const currentUser = authService.getCurrentUser();
       const roleText = currentUser?.role === 'mitra' ? 'mitra' : 'admin';
       setError(`Akun ${roleText} tidak dapat membeli tiket. Silakan gunakan akun regular untuk pembelian.`);
       return;
@@ -173,6 +184,11 @@ export default function EventDetail() {
       }
       if (ticket.maxPembelianPerOrang && quantity > ticket.maxPembelianPerOrang) {
         setError(`Maksimal pembelian ${ticket.maxPembelianPerOrang} tiket per jenis`);
+        return;
+      }
+      // Check if ticket is for students only and user is not verified
+      if (ticket.khususMahasiswa && currentUser?.studentVerificationStatus !== 'approved') {
+        setError('Tiket ini khusus untuk mahasiswa yang telah terverifikasi. Silakan lengkapi verifikasi mahasiswa di profil Anda dan tunggu persetujuan admin.');
         return;
       }
     }
@@ -223,7 +239,7 @@ export default function EventDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 py-8 pt-24">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-blue-50 to-gray-100 py-8 pt-24">
       <div className="container mx-auto px-4">
         {/* Back Button */}
         <button
@@ -238,7 +254,7 @@ export default function EventDetail() {
 
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
           {/* Hero Image */}
-          <div className="relative h-64 md:h-96 bg-gradient-to-r from-blue-600 to-blue-800">
+            <div className="relative h-64 md:h-96 bg-linear-to-r from-blue-600 to-blue-800">
             <img
               src={event.gambar}
               alt={event.nama}
@@ -247,7 +263,7 @@ export default function EventDetail() {
                 e.currentTarget.src = '/images/default-event.jpg';
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent"></div>
             <div className="absolute bottom-6 left-6 right-6">
               <span className="inline-block bg-white/20 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-semibold mb-3">
                 {event.kategori}
@@ -263,7 +279,7 @@ export default function EventDetail() {
             <div className="lg:w-2/3 p-6 md:p-8">
               {/* Event Info Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl border border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <div className="bg-linear-to-br from-blue-50 to-blue-100 p-6 rounded-2xl border border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                   <div className="flex items-center gap-3 text-blue-600 mb-3">
                     <div className="p-2 bg-blue-100 rounded-full">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,7 +292,7 @@ export default function EventDetail() {
                   <p className="text-sm text-gray-600">{formatTanggal(event.tanggal).split(',')[1]}</p>
                 </div>
 
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-2xl border border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <div className="bg-linear-to-br from-purple-50 to-purple-100 p-6 rounded-2xl border border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                   <div className="flex items-center gap-3 text-purple-600 mb-3">
                     <div className="p-2 bg-purple-100 rounded-full">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -289,7 +305,7 @@ export default function EventDetail() {
                   <p className="text-sm text-gray-600">WIB</p>
                 </div>
 
-                <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-2xl border border-green-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 md:col-span-1">
+                <div className="bg-linear-to-br from-green-50 to-green-100 p-6 rounded-2xl border border-green-200 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 md:col-span-1">
                   <div className="flex items-center gap-3 text-green-600 mb-3">
                     <div className="p-2 bg-green-100 rounded-full">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -305,14 +321,14 @@ export default function EventDetail() {
               </div>
 
               {/* Organizer */}
-              <Link href={`/mitra/${event.createdBy.slug}`}>
+              <Link href={`/mitra/${event.createdBy.slug}`} className="block hover:no-underline">
                 <div className="bg-gray-50 rounded-xl p-4 mb-8 flex items-center gap-3 hover:bg-gray-100 transition cursor-pointer">
                   <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
                     {event.penyelenggara.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <p className="text-xs text-gray-500">Diselenggarakan oleh</p>
-                    <p className="font-bold text-gray-900">{event.penyelenggara}</p>
+                    <p className="font-bold text-gray-900 hover:text-blue-600 transition-colors">{event.penyelenggara}</p>
                   </div>
                 </div>
               </Link>

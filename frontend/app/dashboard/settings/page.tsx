@@ -57,11 +57,18 @@ interface Settings {
   };
 }
 
+interface Tab {
+  id: string;
+  name: string;
+  icon: string;
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('notifications');
+  const [user, setUser] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState('account');
   const [showAddBank, setShowAddBank] = useState(false);
   const [bankForm, setBankForm] = useState({
     bankName: '',
@@ -72,13 +79,44 @@ export default function SettingsPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [isFetchingName, setIsFetchingName] = useState(false);
 
-  useEffect(() => {
-    if (!authService.isAuthenticated()) {
-      router.push('/login');
-      return;
+  // Password change state
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+
+  // Preferences state
+  const [preferences, setPreferences] = useState({
+    theme: 'light',
+    emailNotifications: {
+      user: {
+        eventUpdates: true,
+        ticketReminders: true
+      },
+      mitra: {
+        ticketSales: true,
+        withdrawalSuccess: true
+      }
     }
-    fetchSettings();
-  }, []);
+  });
+
+  useEffect(() => {
+    const currentTabs = getTabs();
+    if (user && currentTabs.length > 0 && !currentTabs.find((tab: Tab) => tab.id === activeTab)) {
+      setActiveTab(currentTabs[0].id);
+    }
+  }, [user, activeTab]);
+
+  const fetchUser = async () => {
+    try {
+      const userData = authService.getCurrentUser();
+      setUser(userData);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    }
+  };
 
   const fetchSettings = async () => {
     try {
@@ -98,6 +136,47 @@ export default function SettingsPage() {
       fetchSettings();
     } catch (error) {
       console.error('Error updating notifications:', error);
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      alert('Password baru dan konfirmasi password tidak cocok');
+      return;
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      alert('Password baru minimal 6 karakter');
+      return;
+    }
+
+    try {
+      await api.put('/auth/password', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
+      });
+
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      });
+      setChangingPassword(false);
+      alert('Password berhasil diubah!');
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Gagal mengubah password');
+    }
+  };
+
+  const updatePreferences = async (key: string, value: any) => {
+    try {
+      // For now, just update local state. In a real app, you'd save to backend
+      setPreferences(prev => ({ ...prev, [key]: value }));
+      alert('Preferensi berhasil diperbarui!');
+    } catch (error) {
+      console.error('Error updating preferences:', error);
     }
   };
 
@@ -176,11 +255,83 @@ export default function SettingsPage() {
     }
   };
 
-  const tabs = [
-    { id: 'notifications', name: 'Notifikasi', icon: '🔔' },
-    { id: 'bank', name: 'Rekening Bank', icon: '🏦' },
-    { id: 'defaults', name: 'Default Event', icon: '⚙️' }
-  ];
+  // Dynamic tabs based on user role
+  const getTabs = () => {
+    if (!user) return [];
+
+    const baseTabs = [
+      { id: 'account', name: 'Akun & Keamanan', icon: '🔐' },
+      { id: 'preferences', name: 'Preferensi', icon: '⚙️' }
+    ];
+
+    // Add billing tab only for mitra and admin
+    if (user.role === 'mitra' || user.role === 'admin') {
+      baseTabs.splice(1, 0, { id: 'billing', name: 'Keuangan', icon: '💳' });
+    }
+
+    return baseTabs;
+  };
+
+  // Get notification options based on user role
+  const getNotificationOptions = () => {
+    if (!user) return {};
+
+    if (user.role === 'user') {
+      // User notifications: event reminders and order updates
+      return {
+        email: {
+          eventReminder: 'Pengingat Event',
+          newOrder: 'Pembelian Tiket Baru'
+        },
+        push: {
+          eventReminder: 'Pengingat Event',
+          newOrder: 'Pembelian Tiket Baru'
+        }
+      };
+    } else if (user.role === 'mitra') {
+      // Mitra notifications: event approvals, sales, withdrawals
+      return {
+        email: {
+          eventApproved: 'Event Disetujui',
+          eventRejected: 'Event Ditolak',
+          newOrder: 'Penjualan Tiket Baru',
+          withdrawalProcessed: 'Penarikan Dana Diproses',
+          withdrawalRejected: 'Penarikan Dana Ditolak'
+        },
+        push: {
+          eventApproved: 'Event Disetujui',
+          eventRejected: 'Event Ditolak',
+          newOrder: 'Penjualan Tiket Baru',
+          withdrawalProcessed: 'Penarikan Dana Diproses',
+          withdrawalRejected: 'Penarikan Dana Ditolak'
+        }
+      };
+    } else if (user.role === 'admin') {
+      // Admin notifications: all notifications
+      return {
+        email: {
+          eventApproved: 'Event Disetujui',
+          eventRejected: 'Event Ditolak',
+          newOrder: 'Pembelian/Penjualan Tiket',
+          withdrawalProcessed: 'Penarikan Dana Diproses',
+          withdrawalRejected: 'Penarikan Dana Ditolak',
+          eventReminder: 'Pengingat Event'
+        },
+        push: {
+          eventApproved: 'Event Disetujui',
+          eventRejected: 'Event Ditolak',
+          newOrder: 'Pembelian/Penjualan Tiket',
+          withdrawalProcessed: 'Penarikan Dana Diproses',
+          withdrawalRejected: 'Penarikan Dana Ditolak',
+          eventReminder: 'Pengingat Event'
+        }
+      };
+    }
+
+    return {};
+  };
+
+  const notificationOptions = getNotificationOptions();
 
   if (loading) {
     return (
@@ -195,23 +346,31 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto">
+      <div>
         {/* Header */}
-        <div className="mb-6 md:mb-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">⚙️ Pengaturan</h1>
-          <p className="text-sm md:text-base text-gray-600">Kelola preferensi dan pengaturan akun Anda</p>
+        <div className="bg-linear-to-r from-blue-50 to-yellow-50 rounded-2xl p-4 md:p-6 lg:p-8 mb-6 md:mb-8 border-2 border-blue-100">
+          <div className="flex items-center gap-2 md:gap-3 mb-2">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+              <svg className="w-6 h-6 md:w-7 md:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-blue-600">Pengaturan</h1>
+          </div>
+          <p className="text-gray-600 text-sm md:text-base lg:text-lg ml-0 md:ml-15">Kelola preferensi dan pengaturan akun Anda</p>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 overflow-x-auto">
-          <div className="flex gap-2 p-3 min-w-max">
-            {tabs.map((tab) => (
+        <div className="bg-white rounded-2xl shadow-lg p-4 md:p-6 mb-6 border-2 border-gray-100">
+          <div className="flex gap-2 overflow-x-auto pb-2">
+            {getTabs().map((tab: Tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition whitespace-nowrap ${
+                className={`px-4 md:px-6 py-3 rounded-xl font-semibold text-sm whitespace-nowrap transition ${
                   activeTab === tab.id
-                    ? 'bg-blue-600 text-white shadow-md'
+                    ? 'bg-blue-600 text-white shadow-lg'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
@@ -223,71 +382,103 @@ export default function SettingsPage() {
         </div>
 
         {/* Tab Content */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          {/* Notifications Tab */}
-          {activeTab === 'notifications' && settings && (
-            <div className="space-y-6">
+        <div className="bg-white rounded-2xl shadow-lg overflow-hidden border-2 border-gray-100">
+          {/* Account & Security Tab */}
+          {activeTab === 'account' && (
+            <div className="p-4 md:p-6 space-y-6">
               <div>
-                <h3 className="text-lg font-bold text-gray-900 mb-4">📧 Notifikasi Email</h3>
-                <div className="space-y-3">
-                  {Object.entries(settings.notifications.email).map(([key, value]) => (
-                    <label key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
-                      <span className="text-gray-700 font-medium">
-                        {key === 'eventApproved' && 'Event Disetujui'}
-                        {key === 'eventRejected' && 'Event Ditolak'}
-                        {key === 'newOrder' && 'Pembelian Tiket Baru'}
-                        {key === 'withdrawalProcessed' && 'Penarikan Dana Diproses'}
-                        {key === 'withdrawalRejected' && 'Penarikan Dana Ditolak'}
-                        {key === 'eventReminder' && 'Pengingat Event'}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => updateNotifications('email', key, e.target.checked)}
-                        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">🔐 Keamanan Akun</h3>
 
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-bold text-gray-900 mb-4">🔔 Notifikasi Push</h3>
-                <div className="space-y-3">
-                  {Object.entries(settings.notifications.push).map(([key, value]) => (
-                    <label key={key} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
-                      <span className="text-gray-700 font-medium">
-                        {key === 'eventApproved' && 'Event Disetujui'}
-                        {key === 'eventRejected' && 'Event Ditolak'}
-                        {key === 'newOrder' && 'Pembelian Tiket Baru'}
-                        {key === 'withdrawalProcessed' && 'Penarikan Dana Diproses'}
-                        {key === 'withdrawalRejected' && 'Penarikan Dana Ditolak'}
-                        {key === 'eventReminder' && 'Pengingat Event'}
-                      </span>
-                      <input
-                        type="checkbox"
-                        checked={value}
-                        onChange={(e) => updateNotifications('push', key, e.target.checked)}
-                        className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                {!changingPassword ? (
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">Password</h4>
+                          <p className="text-sm text-gray-600">Terakhir diubah 30 hari yang lalu</p>
+                        </div>
+                        <Button onClick={() => setChangingPassword(true)} variant="outline">
+                          Ubah Password
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-red-900 mb-2">🗑️ Hapus Akun</h4>
+                      <p className="text-sm text-red-700 mb-4">
+                        Tindakan ini tidak dapat dibatalkan. Semua data Anda akan dihapus secara permanen.
+                      </p>
+                      <Button variant="destructive" className="w-full md:w-auto">
+                        Hapus Akun Saya
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleChangePassword} className="space-y-4">
+                    <div>
+                      <Label htmlFor="currentPassword">Password Lama</Label>
+                      <Input
+                        id="currentPassword"
+                        type="password"
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        required
                       />
-                    </label>
-                  ))}
-                </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="newPassword">Password Baru</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        required
+                        minLength={6}
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="confirmPassword">Konfirmasi Password Baru</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                        required
+                        minLength={6}
+                      />
+                    </div>
+
+                    <div className="flex gap-3">
+                      <Button type="submit" className="flex-1">
+                        Simpan Password
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setChangingPassword(false);
+                          setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                        }}
+                      >
+                        Batal
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           )}
 
-          {/* Bank Accounts Tab */}
-          {activeTab === 'bank' && settings && (
-            <div className="space-y-6">
+          {/* Billing Tab - Only for Mitra/Admin */}
+          {activeTab === 'billing' && (user?.role === 'mitra' || user?.role === 'admin') && settings && (
+            <div className="p-4 md:p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900">🏦 Rekening Bank</h3>
-                <button
-                  onClick={() => setShowAddBank(!showAddBank)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm"
-                >
+                <h3 className="text-lg font-bold text-gray-900">💳 Informasi Pencairan Dana</h3>
+                <Button onClick={() => setShowAddBank(!showAddBank)}>
                   + Tambah Rekening
-                </button>
+                </Button>
               </div>
 
               {showAddBank && (
@@ -297,10 +488,11 @@ export default function SettingsPage() {
                       <strong>ℹ️ Info:</strong> Nomor rekening akan divalidasi secara otomatis menggunakan sistem bank. Pastikan data yang Anda masukkan benar.
                     </p>
                   </div>
-                  
+
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Nama Bank</label>
+                    <Label htmlFor="bankName">Nama Bank</Label>
                     <select
+                      id="bankName"
                       value={bankForm.bankName}
                       onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -336,15 +528,14 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Nomor Rekening</label>
+                    <Label htmlFor="accountNumber">Nomor Rekening</Label>
                     <div className="relative">
-                      <input
-                        type="text"
+                      <Input
+                        id="accountNumber"
                         placeholder="Contoh: 1234567890"
                         value={bankForm.accountNumber}
                         onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\D/g, '') })}
                         onBlur={fetchAccountName}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         pattern="\d+"
                         required
                       />
@@ -358,45 +549,28 @@ export default function SettingsPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    <Label htmlFor="accountName">
                       Nama Pemilik Rekening
                       {bankForm.accountName && (
                         <span className="ml-2 text-xs text-green-600 font-normal">✓ Terverifikasi dari bank</span>
                       )}
-                    </label>
-                    <input
-                      type="text"
+                    </Label>
+                    <Input
+                      id="accountName"
                       placeholder="Akan otomatis terisi setelah input nomor rekening"
                       value={bankForm.accountName}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
                       readOnly
                       required
                     />
                   </div>
 
                   <div className="flex gap-2">
-                    <button 
-                      type="submit" 
-                      disabled={isValidating}
-                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                    >
-                      {isValidating ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Memvalidasi...
-                        </>
-                      ) : (
-                        '✓ Simpan & Validasi'
-                      )}
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={() => setShowAddBank(false)} 
-                      disabled={isValidating}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-semibold disabled:opacity-50"
-                    >
+                    <Button type="submit" disabled={isValidating} className="flex-1">
+                      {isValidating ? 'Memvalidasi...' : '✓ Simpan & Validasi'}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setShowAddBank(false)} disabled={isValidating}>
                       Batal
-                    </button>
+                    </Button>
                   </div>
                 </form>
               )}
@@ -414,30 +588,32 @@ export default function SettingsPage() {
                           <div className="flex items-center gap-2 mb-1">
                             <h4 className="font-bold text-gray-900">{account.bankName}</h4>
                             {account.isPrimary && (
-                              <span className="px-2 py-1 bg-blue-600 text-white text-xs rounded-full font-bold">
-                                Utama
-                              </span>
+                              <Badge variant="default">Utama</Badge>
                             )}
                           </div>
                           <p className="text-gray-700 font-mono">{account.accountNumber}</p>
                           <p className="text-gray-600 text-sm">{account.accountName}</p>
                         </div>
-                        <button
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => deleteBankAccount(account._id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          className="text-red-600 hover:bg-red-50"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
-                        </button>
+                        </Button>
                       </div>
                       {!account.isPrimary && (
-                        <button
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => setPrimaryAccount(account._id)}
-                          className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                          className="text-sm"
                         >
                           Jadikan Rekening Utama
-                        </button>
+                        </Button>
                       )}
                     </div>
                   ))
@@ -446,67 +622,124 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {/* Preferences Tab */}
+          {activeTab === 'preferences' && (
+            <div className="p-4 md:p-6 space-y-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900 mb-4">⚙️ Preferensi</h3>
 
-
-          {/* Event Defaults Tab */}
-          {activeTab === 'defaults' && settings && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">⚙️ Default Event</h3>
-              <p className="text-gray-600 text-sm mb-4">Pengaturan default untuk mempercepat pembuatan event baru</p>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Kategori Favorit</label>
-                  <select
-                    value={settings.eventDefaults.kategori || ''}
-                    onChange={(e) => updateEventDefaults('kategori', e.target.value || null)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Pilih kategori default...</option>
-                    <option value="musik">🎵 Musik</option>
-                    <option value="olahraga">⚽ Olahraga</option>
-                    <option value="teknologi">💻 Teknologi</option>
-                    <option value="seni">🎨 Seni</option>
-                    <option value="pendidikan">📚 Pendidikan</option>
-                    <option value="bisnis">💼 Bisnis</option>
-                    <option value="lainnya">📌 Lainnya</option>
-                  </select>
+                {/* Theme Toggle */}
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3">🎨 Tampilan</h4>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="theme"
+                        value="light"
+                        checked={preferences.theme === 'light'}
+                        onChange={(e) => updatePreferences('theme', e.target.value)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span>Terang</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="theme"
+                        value="dark"
+                        checked={preferences.theme === 'dark'}
+                        onChange={(e) => updatePreferences('theme', e.target.value)}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span>Gelap</span>
+                    </label>
+                  </div>
                 </div>
 
+                {/* Email Notifications */}
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Lokasi Default</label>
-                  <input
-                    type="text"
-                    value={settings.eventDefaults.lokasi}
-                    onChange={(e) => updateEventDefaults('lokasi', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Contoh: Jakarta Convention Center"
-                  />
-                </div>
+                  <h4 className="font-semibold text-gray-900 mb-4">📧 Notifikasi Email</h4>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Durasi Event Default (menit)</label>
-                  <input
-                    type="number"
-                    value={settings.eventDefaults.durasi}
-                    onChange={(e) => updateEventDefaults('durasi', parseInt(e.target.value))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    min="30"
-                    step="30"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">{settings.eventDefaults.durasi} menit = {Math.floor(settings.eventDefaults.durasi / 60)} jam {settings.eventDefaults.durasi % 60} menit</p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Pengingat Event (hari sebelumnya)</label>
-                  <input
-                    type="number"
-                    value={settings.eventDefaults.reminderDays}
-                    onChange={(e) => updateEventDefaults('reminderDays', parseInt(e.target.value))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    min="0"
-                    max="30"
-                  />
+                  {user?.role === 'user' ? (
+                    <div className="space-y-3">
+                      <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
+                        <span className="text-gray-700 font-medium">Info Event Terbaru</span>
+                        <input
+                          type="checkbox"
+                          checked={preferences.emailNotifications.user.eventUpdates}
+                          onChange={(e) => setPreferences(prev => ({
+                            ...prev,
+                            emailNotifications: {
+                              ...prev.emailNotifications,
+                              user: {
+                                ...prev.emailNotifications.user,
+                                eventUpdates: e.target.checked
+                              }
+                            }
+                          }))}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
+                        <span className="text-gray-700 font-medium">Reminder Tiket</span>
+                        <input
+                          type="checkbox"
+                          checked={preferences.emailNotifications.user.ticketReminders}
+                          onChange={(e) => setPreferences(prev => ({
+                            ...prev,
+                            emailNotifications: {
+                              ...prev.emailNotifications,
+                              user: {
+                                ...prev.emailNotifications.user,
+                                ticketReminders: e.target.checked
+                              }
+                            }
+                          }))}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
+                        <span className="text-gray-700 font-medium">Tiket Terjual</span>
+                        <input
+                          type="checkbox"
+                          checked={preferences.emailNotifications.mitra.ticketSales}
+                          onChange={(e) => setPreferences(prev => ({
+                            ...prev,
+                            emailNotifications: {
+                              ...prev.emailNotifications,
+                              mitra: {
+                                ...prev.emailNotifications.mitra,
+                                ticketSales: e.target.checked
+                              }
+                            }
+                          }))}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
+                      <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition cursor-pointer">
+                        <span className="text-gray-700 font-medium">Pencairan Dana Berhasil</span>
+                        <input
+                          type="checkbox"
+                          checked={preferences.emailNotifications.mitra.withdrawalSuccess}
+                          onChange={(e) => setPreferences(prev => ({
+                            ...prev,
+                            emailNotifications: {
+                              ...prev.emailNotifications,
+                              mitra: {
+                                ...prev.emailNotifications.mitra,
+                                withdrawalSuccess: e.target.checked
+                              }
+                            }
+                          }))}
+                          className="w-5 h-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

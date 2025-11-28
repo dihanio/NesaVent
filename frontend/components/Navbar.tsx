@@ -36,8 +36,8 @@ export default function Navbar() {
   return (
     <nav
       className={`fixed w-full z-50 transition-all duration-300 ${scrolled
-          ? 'bg-white/80 backdrop-blur-md shadow-md py-3'
-          : 'bg-white py-5'
+        ? 'bg-white/80 backdrop-blur-md shadow-md py-3'
+        : 'bg-white py-5'
         }`}
     >
       <div className="container mx-auto px-4">
@@ -68,6 +68,13 @@ export default function Navbar() {
             >
               Jelajahi Event
             </Link>
+            <Link
+              href="/mitra"
+              className={`font-medium transition hover:text-blue-600 ${pathname === '/mitra' ? 'text-blue-600' : 'text-gray-600'
+                }`}
+            >
+              Daftar Mitra
+            </Link>
 
             {user ? (
               <div className="flex items-center gap-6">
@@ -82,7 +89,7 @@ export default function Navbar() {
 
                 <div className="relative group">
                   <button className="flex items-center gap-3 p-1 pr-3 rounded-full border border-gray-200 hover:border-blue-200 hover:bg-blue-50 transition-all">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
+                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-sm">
                       {user.nama.charAt(0).toUpperCase()}
                     </div>
                     <div className="text-left hidden lg:block">
@@ -102,10 +109,13 @@ export default function Navbar() {
                     </div>
 
                     <div className="p-2">
-                      <Link href="/my-tickets" className="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition">
+                      <Link href="/dashboard/profile" className="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition">
+                        <span className="mr-3 text-lg">👤</span> Profil Saya
+                      </Link>
+                      <Link href="/dashboard/my-tickets" className="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition">
                         <span className="mr-3 text-lg">🎫</span> Tiket Saya
                       </Link>
-                      <Link href="/my-orders" className="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition">
+                      <Link href="/dashboard/my-orders" className="flex items-center px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition">
                         <span className="mr-3 text-lg">📋</span> Pesanan Saya
                       </Link>
                       <div className="h-px bg-gray-100 my-2"></div>
@@ -169,6 +179,13 @@ export default function Navbar() {
             >
               🔍 Jelajahi Event
             </Link>
+            <Link
+              href="/mitra"
+              className={`p-3 rounded-xl font-medium ${pathname === '/mitra' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}
+              onClick={() => setIsMenuOpen(false)}
+            >
+              🎯 Daftar Mitra
+            </Link>
 
             {user ? (
               <>
@@ -193,14 +210,21 @@ export default function Navbar() {
                   </Link>
                 )}
                 <Link
-                  href="/my-tickets"
+                  href="/dashboard/profile"
+                  className="p-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  👤 Profil Saya
+                </Link>
+                <Link
+                  href="/dashboard/my-tickets"
                   className="p-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50"
                   onClick={() => setIsMenuOpen(false)}
                 >
                   🎫 Tiket Saya
                 </Link>
                 <Link
-                  href="/my-orders"
+                  href="/dashboard/my-orders"
                   className="p-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50"
                   onClick={() => setIsMenuOpen(false)}
                 >

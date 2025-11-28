@@ -1,9 +1,9 @@
 
 import api from './api';
 
-export const getMitraPublicProfile = async (mitraId: string) => {
+export const getMitraPublicProfile = async (slug: string) => {
   try {
-    const response = await api.get(`/auth/public-profile/${mitraId}`);
+    const response = await api.get(`/auth/public-profile/${slug}`);
     return response.data;
   } catch (error) {
     console.error('Error fetching mitra public profile:', error);

@@ -21,7 +21,7 @@ const createTransporter = () => {
         secure: config.secure
       });
 
-      const transporter = nodemailer.createTransporter(config);
+      const transporter = nodemailer.createTransport(config);
 
       // Test connection immediately
       transporter.verify((error, success) => {
@@ -59,7 +59,7 @@ const createTransporter = () => {
     hasAuth: !!config.auth
   });
 
-  const transporter = nodemailer.createTransporter(config);
+  const transporter = nodemailer.createTransport(config);
 
   transporter.verify((error, success) => {
     if (error) {

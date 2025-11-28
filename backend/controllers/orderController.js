@@ -94,7 +94,7 @@ const createOrder = async (req, res) => {
           return res.status(400).json({ message: `Stok tiket ${ticketType.nama} tidak mencukupi` });
         }
 
-        // Cek maksimal pembelian per orang
+        // Cek maksimal pembelian per orang (untuk semua role)
         if (ticketType.maxPembelianPerOrang) {
           const existingOrders = await Order.find({
             user: req.user._id,
@@ -112,6 +112,52 @@ const createOrder = async (req, res) => {
             return res.status(400).json({
               message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket ${ticketType.nama} per orang. Anda sudah membeli ${totalPurchased} tiket.`
             });
+          }
+        }
+
+        // Validasi khusus untuk tiket mahasiswa - enforce maxPembelianPerOrang wajib
+        if (ticketType.khususMahasiswa && req.user.role === 'user') {
+          // Cek apakah user sudah terverifikasi sebagai mahasiswa
+          if (req.user.studentVerificationStatus !== 'approved') {
+            return res.status(403).json({
+              message: 'Tiket ini khusus untuk mahasiswa terverifikasi. Silakan lengkapi profil mahasiswa Anda (NIM, Program Studi, Fakultas, dan upload KTM) dan tunggu verifikasi dari admin untuk dapat membeli tiket mahasiswa.'
+            });
+          }
+
+          // Jika tiket khusus mahasiswa, pastikan ada batas maksimal
+          if (!ticketType.maxPembelianPerOrang) {
+            return res.status(400).json({
+              message: `Tiket ${ticketType.nama} memerlukan pengaturan maksimal pembelian.`
+            });
+          }
+
+          // Cek total pembelian untuk event ini (bukan per tipe tiket, tapi per event)
+          const existingEventOrders = await Order.find({
+            user: req.user._id,
+            event: eventId,
+            status: { $in: ['pending', 'paid'] }
+          });
+
+          if (existingEventOrders.length > 0) {
+            const totalEventTickets = existingEventOrders.reduce((sum, order) => {
+              return sum + (order.items && order.items.length > 0
+                ? order.items.reduce((itemSum, item) => itemSum + item.jumlah, 0)
+                : order.jumlahTiket || 0);
+            }, 0);
+
+            if (totalEventTickets >= ticketType.maxPembelianPerOrang) {
+              return res.status(400).json({
+                message: `Akun mahasiswa dibatasi maksimal ${ticketType.maxPembelianPerOrang} tiket untuk event ini. Anda sudah membeli ${totalEventTickets} tiket.`
+              });
+            }
+
+            // Cek apakah pembelian sekarang + yang sudah ada melebihi batas
+            if (totalEventTickets + quantity > ticketType.maxPembelianPerOrang) {
+              const remaining = ticketType.maxPembelianPerOrang - totalEventTickets;
+              return res.status(400).json({
+                message: `Anda hanya bisa membeli ${remaining} tiket lagi untuk event ini (maksimal ${ticketType.maxPembelianPerOrang} tiket per mahasiswa).`
+              });
+            }
           }
         }
 
@@ -182,6 +228,51 @@ const createOrder = async (req, res) => {
             return res.status(400).json({
               message: `Maksimal pembelian ${ticketType.maxPembelianPerOrang} tiket per orang. Anda sudah membeli ${totalPurchased} tiket.`
             });
+          }
+        }
+
+        // Validasi khusus untuk tiket mahasiswa (legacy)
+        if (ticketType.khususMahasiswa && req.user.role === 'user') {
+          // Cek apakah user sudah terverifikasi sebagai mahasiswa
+          if (!req.user.isStudentVerified) {
+            return res.status(403).json({
+              message: 'Tiket ini khusus untuk mahasiswa terverifikasi. Silakan lengkapi profil mahasiswa Anda (NIM, Program Studi, Fakultas, dan upload KTM) untuk dapat membeli tiket mahasiswa.'
+            });
+          }
+
+          // Jika tiket khusus mahasiswa, pastikan ada batas maksimal
+          if (!ticketType.maxPembelianPerOrang) {
+            return res.status(400).json({
+              message: `Tiket ${ticketType.nama} memerlukan pengaturan maksimal pembelian.`
+            });
+          }
+
+          // Cek total pembelian untuk event ini
+          const existingEventOrders = await Order.find({
+            user: req.user._id,
+            event: eventId,
+            status: { $in: ['pending', 'paid'] }
+          });
+
+          if (existingEventOrders.length > 0) {
+            const totalEventTickets = existingEventOrders.reduce((sum, order) => {
+              return sum + (order.items && order.items.length > 0
+                ? order.items.reduce((itemSum, item) => itemSum + item.jumlah, 0)
+                : order.jumlahTiket || 0);
+            }, 0);
+
+            if (totalEventTickets >= ticketType.maxPembelianPerOrang) {
+              return res.status(400).json({
+                message: `Akun mahasiswa dibatasi maksimal ${ticketType.maxPembelianPerOrang} tiket untuk event ini. Anda sudah membeli ${totalEventTickets} tiket.`
+              });
+            }
+
+            if (totalEventTickets + jumlahTiket > ticketType.maxPembelianPerOrang) {
+              const remaining = ticketType.maxPembelianPerOrang - totalEventTickets;
+              return res.status(400).json({
+                message: `Anda hanya bisa membeli ${remaining} tiket lagi untuk event ini (maksimal ${ticketType.maxPembelianPerOrang} tiket per mahasiswa).`
+              });
+            }
           }
         }
 

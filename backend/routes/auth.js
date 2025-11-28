@@ -11,6 +11,7 @@ const {
   verifyCode,
   resendVerificationCode,
   resetPassword,
+  uploadKTM,
 } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 
@@ -21,7 +22,7 @@ router.post('/verify-code', verifyCode);
 router.post('/resend-code', resendVerificationCode);
 router.post('/reset-password', resetPassword);
 router.get('/profile', protect, getUserProfile);
-router.put('/profile', protect, updateProfile);
+router.put('/profile', protect, uploadKTM.single('ktm'), updateProfile);
 router.put('/password', protect, changePassword);
 router.get('/public-profile/:slug', getPublicProfile);
 

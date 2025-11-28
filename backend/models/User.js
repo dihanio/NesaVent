@@ -51,6 +51,51 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Field khusus mahasiswa
+  nim: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true, // Allow null values to be non-unique
+    validate: {
+      validator: function (v) {
+        // Jika ada NIM, harus 11 digit angka
+        if (v && v.length > 0) {
+          return /^\d{11}$/.test(v);
+        }
+        return true; // Allow empty/null
+      },
+      message: 'NIM harus terdiri dari 11 digit angka'
+    }
+  },
+  programStudi: {
+    type: String,
+    trim: true
+  },
+  fakultas: {
+    type: String,
+    trim: true
+  },
+  ktm: {
+    type: String,
+    trim: true
+  },
+  studentVerificationStatus: {
+    type: String,
+    enum: ['unverified', 'pending', 'approved', 'rejected'],
+    default: 'unverified'
+  },
+  studentVerificationNote: {
+    type: String,
+    trim: true
+  },
+  // Backward compatibility - computed field
+  isStudentVerified: {
+    type: Boolean,
+    get: function() {
+      return this.studentVerificationStatus === 'approved';
+    }
+  },
   avatar: {
     type: String,
     default: 'https://www.gravatar.com/avatar/?d=mp'
@@ -82,7 +127,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // Pre-save hook untuk generate slug
-userSchema.pre('save', async function() {
+userSchema.pre('save', async function () {
   if (this.isModified('nama') || this.isNew) {
     let baseSlug = slugify(this.nama);
     let slug = baseSlug;
@@ -103,7 +148,7 @@ userSchema.pre('save', async function() {
 });
 
 // Pre-save hook untuk hash password
-userSchema.pre('save', async function() {
+userSchema.pre('save', async function () {
   console.log(`[USER MODEL] Pre-save hook triggered for user: ${this.email}`);
   console.log(`[USER MODEL] Password modified: ${this.isModified('password')}`);
 
@@ -117,6 +162,19 @@ userSchema.pre('save', async function() {
     console.log(`[USER MODEL] Password not modified, skipping hash for: ${this.email}`);
   }
 });
+
+// Virtual field untuk angkatan (dari 2 digit pertama NIM)
+userSchema.virtual('angkatan').get(function () {
+  if (this.nim && this.nim.length >= 2) {
+    const tahunAngka = parseInt(this.nim.substring(0, 2));
+    return 2000 + tahunAngka; // 23 -> 2023
+  }
+  return null;
+});
+
+// Set toJSON dan toObject untuk include virtuals
+userSchema.set('toJSON', { virtuals: true });
+userSchema.set('toObject', { virtuals: true });
 
 // Method untuk cek password
 userSchema.methods.matchPassword = async function (enteredPassword) {

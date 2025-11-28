@@ -5,8 +5,10 @@ interface User {
   nama: string;
   email: string;
   nomorTelepon?: string;
-  role: 'user' | 'mitra' | 'admin';
+  role: 'user' | 'mahasiswa' | 'mitra' | 'admin';
   organisasi?: string;
+  isStudentVerified?: boolean;
+  studentVerificationStatus?: 'unverified' | 'pending' | 'approved' | 'rejected';
 }
 
 interface LoginResponse {
@@ -14,8 +16,10 @@ interface LoginResponse {
   nama: string;
   email: string;
   nomorTelepon?: string;
-  role: 'user' | 'mitra' | 'admin';
+  role: 'user' | 'mahasiswa' | 'mitra' | 'admin';
   organisasi?: string;
+  isStudentVerified?: boolean;
+  studentVerificationStatus?: 'unverified' | 'pending' | 'approved' | 'rejected';
   token: string;
 }
 

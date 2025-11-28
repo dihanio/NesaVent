@@ -71,7 +71,7 @@ export default function EventCard({ event }: EventCardProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4 flex flex-col flex-grow">
+        <div className="p-4 flex flex-col grow">
           <h3 className="font-bold text-xl mb-2 text-gray-800 line-clamp-2 h-14">
             {event.nama}
           </h3>

@@ -143,7 +143,7 @@ frontend/
 - **Withdrawal Requests**: Request payment withdrawals
 - **Profile Management**: Update organizer information
 
-#### User Dashboard (`/my-orders`, `/my-tickets`)
+#### User Dashboard (`/dashboard/my-orders`, `/dashboard/my-tickets`)
 - **Order History**: View past and current orders
 - **Ticket Management**: Access purchased tickets
 - **Profile**: Update personal information

@@ -126,7 +126,7 @@ export default function CheckoutPage() {
         transactionId: `TXN-${Date.now()}`,
       });
 
-      router.push(`/my-orders`);
+      router.push(`/dashboard/my-orders`);
     } catch (err: unknown) {
       console.error('Error during checkout:', err);
       const error = err as { response?: { data?: { message?: string } } };
@@ -158,7 +158,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-100 py-8 pt-24">
+    <div className="min-h-screen bg-linear-to-br from-gray-50 via-blue-50 to-gray-100 py-8 pt-24">
       <div className="container mx-auto px-4 max-w-4xl">
         {/* Back Button */}
         <button
@@ -177,7 +177,7 @@ export default function CheckoutPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Ringkasan Pesanan</h2>
 
             {/* Event Info */}
-            <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-xl p-4 mb-6">
+            <div className="bg-linear-to-r from-blue-50 to-blue-100 rounded-xl p-4 mb-6">
               <div className="flex gap-4">
                 <img
                   src={order.event.gambar}
