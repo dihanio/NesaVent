@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -21,6 +22,8 @@ interface UserProfile {
   nomorTelepon?: string;
   role: 'user' | 'mahasiswa' | 'mitra' | 'admin';
   avatar?: string;
+  coverImage?: string;
+  themeColor?: string;
   organisasi?: string;
   deskripsiOrganisasi?: string;
   instagram?: string;
@@ -66,6 +69,8 @@ export default function ProfilePage() {
   const [selectedFakultas, setSelectedFakultas] = useState<string>('');
   const [isEditingStudentInfo, setIsEditingStudentInfo] = useState(false);
   const [ktmFile, setKtmFile] = useState<File | null>(null);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
 
   // Check if student info is complete
   const isStudentInfoComplete = !!(profile?.nim && profile?.programStudi && profile?.fakultas);
@@ -226,6 +231,55 @@ export default function ProfilePage() {
     }
   };
 
+  const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('File harus berupa gambar');
+      return;
+    }
+    // Validate file size (max 5MB for cover)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ukuran file maksimal 5MB');
+      return;
+    }
+
+    setCoverImageFile(file);
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCoverImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const uploadCoverImage = async () => {
+    if (!coverImageFile) return;
+
+    try {
+      setSaving(true);
+      const formData = new FormData();
+      formData.append('coverImage', coverImageFile);
+
+      const response = await api.put('/auth/profile/cover', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      setProfile(response.data);
+      setCoverImageFile(null);
+      setCoverImagePreview(null);
+      alert('Cover image berhasil diperbarui!');
+    } catch (error: any) {
+      console.error('Error uploading cover image:', error);
+      alert(error.response?.data?.message || 'Gagal mengupload cover image');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startEditingStudentInfo = () => {
     // Allow editing if info is incomplete OR if complete but not verified (needs KTM)
     if (isStudentInfoComplete && profile?.isStudentVerified) {
@@ -271,20 +325,20 @@ export default function ProfilePage() {
     <DashboardLayout>
       <div>
         {/* Header */}
-        <div className="bg-linear-to-r from-blue-50 to-yellow-50 rounded-2xl p-4 md:p-6 lg:p-8 mb-6 md:mb-8 border-2 border-blue-100">
-          <div className="flex items-center gap-2 md:gap-3 mb-2">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 md:w-7 md:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="bg-linear-to-r from-blue-50 to-yellow-50 rounded-xl md:rounded-2xl p-4 md:p-6 lg:p-8 mb-4 md:mb-6 lg:mb-8 border-2 border-blue-100">
+          <div className="flex items-center gap-2 md:gap-3 mb-1 md:mb-2">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shrink-0">
+              <svg className="w-5 h-5 md:w-6 md:h-6 lg:w-7 lg:h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
             </div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-blue-600">Profil</h1>
+            <h1 className="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-blue-600">Profil</h1>
           </div>
-          <p className="text-gray-600 text-sm md:text-base lg:text-lg ml-0 md:ml-15">Kelola informasi profil dan identitas Anda</p>
+          <p className="text-gray-600 text-xs md:text-sm lg:text-base ml-0 md:ml-14 lg:ml-15">Kelola informasi profil dan identitas Anda</p>
         </div>
 
         <form onSubmit={updateProfile}>
-          <div className="space-y-6">
+          <div className="space-y-4 md:space-y-6">
               {/* General Information */}
               <Card>
                 <CardHeader>
@@ -293,15 +347,15 @@ export default function ProfilePage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Avatar */}
-                  <div className="flex items-center gap-4">
-                    <Avatar className="w-20 h-20">
+                  <div className="flex items-center gap-3 md:gap-4">
+                    <Avatar className="w-16 h-16 md:w-20 md:h-20 shrink-0">
                       <AvatarImage src={profile.avatar} alt={profile.nama} />
-                      <AvatarFallback className="text-lg">
+                      <AvatarFallback className="text-base md:text-lg">
                         {profile.nama.split(' ').map(n => n[0]).join('').toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <Button type="button" variant="outline" size="sm">
+                      <Button type="button" variant="outline" size="sm" className="text-xs md:text-sm">
                         Ubah Foto
                       </Button>
                       <p className="text-xs text-gray-500 mt-1">JPG, PNG hingga 2MB</p>
@@ -359,9 +413,79 @@ export default function ProfilePage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Informasi Organisasi</CardTitle>
-                  <CardDescription>Informasi tentang organisasi Anda</CardDescription>
+                  <CardDescription>Informasi tentang organisasi Anda yang akan ditampilkan di halaman publik</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                  {/* Cover Image Upload */}
+                  <div className="space-y-3">
+                    <Label>Cover Image (Banner)</Label>
+                    <div className="rounded-lg border-2 border-dashed border-gray-300 overflow-hidden">
+                      {/* Cover Preview */}
+                      <div className="relative h-48 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-600">
+                        {coverImagePreview || profile.coverImage ? (
+                          <img
+                            src={coverImagePreview || profile.coverImage}
+                            alt="Cover preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white/30 text-6xl">
+                            🎭
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Upload Controls */}
+                      <div className="p-4 bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="file"
+                            id="coverImage"
+                            accept="image/*"
+                            onChange={handleCoverImageChange}
+                            className="hidden"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => document.getElementById('coverImage')?.click()}
+                          >
+                            {profile.coverImage ? 'Ganti Cover' : 'Upload Cover'}
+                          </Button>
+                          {coverImageFile && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={uploadCoverImage}
+                              disabled={saving}
+                            >
+                              {saving ? 'Uploading...' : 'Simpan Cover'}
+                            </Button>
+                          )}
+                          {coverImageFile && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setCoverImageFile(null);
+                                setCoverImagePreview(null);
+                              }}
+                            >
+                              Batal
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-2">
+                          JPG atau PNG, maksimal 5MB. Ukuran yang disarankan: 1200x400 piksel
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Separator />
+
                   {/* Organization Name */}
                   <div>
                     <Label htmlFor="organisasi">Nama Organisasi</Label>
@@ -384,6 +508,36 @@ export default function ProfilePage() {
                       rows={4}
                     />
                   </div>
+
+                  {/* Theme Color Picker */}
+                  <div>
+                    <Label htmlFor="themeColor">Warna Tema Profil</Label>
+                    <Select 
+                      value={profile.themeColor || 'blue'} 
+                      onValueChange={(value) => handleInputChange('themeColor', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Pilih warna tema" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="blue">🔵 Blue</SelectItem>
+                        <SelectItem value="indigo">🟣 Indigo</SelectItem>
+                        <SelectItem value="purple">💜 Purple</SelectItem>
+                        <SelectItem value="pink">🌸 Pink</SelectItem>
+                        <SelectItem value="red">🔴 Red</SelectItem>
+                        <SelectItem value="orange">🟠 Orange</SelectItem>
+                        <SelectItem value="yellow">🟡 Yellow</SelectItem>
+                        <SelectItem value="green">🟢 Green</SelectItem>
+                        <SelectItem value="teal">🩵 Teal</SelectItem>
+                        <SelectItem value="cyan">💠 Cyan</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Warna tema akan diterapkan pada banner, avatar, dan tombol di profil publik Anda
+                    </p>
+                  </div>
+
+                  <Separator />
 
                   {/* Social Media */}
                   <div>
@@ -413,10 +567,10 @@ export default function ProfilePage() {
             {(profile.role === 'user' || profile.role === 'mahasiswa') && (
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4">
                     <div>
-                      <CardTitle>Informasi Mahasiswa</CardTitle>
-                      <CardDescription>
+                      <CardTitle className="text-base md:text-lg">Informasi Mahasiswa</CardTitle>
+                      <CardDescription className="text-xs md:text-sm mt-1">
                         {profile.studentVerificationStatus === 'approved'
                           ? 'Informasi akademik Anda sudah terverifikasi.'
                           : profile.studentVerificationStatus === 'pending'
@@ -427,11 +581,11 @@ export default function ProfilePage() {
                         }
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                       {/* Status Verifikasi */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-600">Status:</span>
-                        <Badge variant={
+                      <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <span className="text-xs md:text-sm text-gray-600 shrink-0">Status:</span>
+                        <Badge className="text-xs" variant={
                           profile.studentVerificationStatus === 'approved' ? 'default' :
                           profile.studentVerificationStatus === 'pending' ? 'secondary' :
                           profile.studentVerificationStatus === 'rejected' ? 'destructive' : 'outline'
@@ -470,17 +624,17 @@ export default function ProfilePage() {
 
                       {/* Verification Note */}
                       {profile.studentVerificationNote && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600">Catatan:</span>
-                          <span className={`text-sm ${profile.studentVerificationStatus === 'rejected' ? 'text-red-600' : 'text-green-600'}`}>
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 w-full sm:w-auto">
+                          <span className="text-xs md:text-sm text-gray-600 shrink-0">Catatan:</span>
+                          <span className={`text-xs md:text-sm ${profile.studentVerificationStatus === 'rejected' ? 'text-red-600' : 'text-green-600'}`}>
                             {profile.studentVerificationNote}
                           </span>
                         </div>
                       )}
 
                       {profile?.studentVerificationStatus !== 'approved' && !isEditingStudentInfo && (
-                        <Button onClick={startEditingStudentInfo} variant="outline">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <Button onClick={startEditingStudentInfo} variant="outline" size="sm" className="w-full sm:w-auto text-xs md:text-sm">
+                          <svg className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                           {!isStudentInfoComplete ? 'Lengkapi Data' : isKtmRequired ? 'Upload KTM' : 'Update Data'}
@@ -685,8 +839,8 @@ export default function ProfilePage() {
 
           {/* Save Button */}
           {!isEditingStudentInfo && (
-            <div className="mt-6 flex justify-end">
-              <Button type="submit" disabled={saving} className="px-8">
+            <div className="mt-4 md:mt-6 flex justify-end">
+              <Button type="submit" disabled={saving} className="w-full sm:w-auto px-6 md:px-8">
                 {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
               </Button>
             </div>

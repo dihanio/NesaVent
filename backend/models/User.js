@@ -100,6 +100,15 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'https://www.gravatar.com/avatar/?d=mp'
   },
+  coverImage: {
+    type: String,
+    default: null
+  },
+  themeColor: {
+    type: String,
+    default: 'blue', // blue, indigo, purple, pink, red, orange, yellow, green, teal, cyan
+    enum: ['blue', 'indigo', 'purple', 'pink', 'red', 'orange', 'yellow', 'green', 'teal', 'cyan']
+  },
   isVerified: {
     type: Boolean,
     default: false
@@ -171,6 +180,13 @@ userSchema.virtual('angkatan').get(function () {
   }
   return null;
 });
+
+// Indexes for query optimization
+userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ slug: 1 }, { unique: true });
+userSchema.index({ nim: 1 }, { unique: true, sparse: true });
+userSchema.index({ role: 1 });
+userSchema.index({ studentVerificationStatus: 1 });
 
 // Set toJSON dan toObject untuk include virtuals
 userSchema.set('toJSON', { virtuals: true });

@@ -269,27 +269,39 @@ export default function DashboardShell({ children, menuItems, user }: DashboardS
             {/* Bottom Navigation - Mobile */}
             <nav className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-blue-100 shadow-2xl z-50 md:hidden">
                 <div className="flex items-center justify-around px-2 py-3">
-                    {menuItems.map((item) => {
-                        const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
+                    {/* Filter to show only essential menu items for mobile */}
+                    {menuItems
+                        .filter((item) => {
+                            // Show only these essential menus in bottom navigation
+                            const essentialMenus = [
+                                '/dashboard',
+                                '/dashboard/my-tickets',
+                                '/dashboard/my-orders',
+                                '/dashboard/profile'
+                            ];
+                            return essentialMenus.includes(item.href);
+                        })
+                        .map((item) => {
+                            const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href));
 
-                        return (
-                            <button
-                                key={item.href}
-                                onClick={() => router.push(item.href)}
-                                className={`flex flex-col items-center gap-1 px-2 py-2 rounded-xl min-w-14 ${isActive
-                                        ? 'text-blue-600'
-                                        : 'text-gray-500'
-                                    }`}
-                            >
-                                <div className={`${isActive ? 'scale-110' : ''}`}>
-                                    {item.icon}
-                                </div>
-                                <span className={`text-xs font-medium ${isActive ? 'text-blue-600' : 'text-gray-600'}`}>
-                                    {item.name}
-                                </span>
-                            </button>
-                        );
-                    })}
+                            return (
+                                <button
+                                    key={item.href}
+                                    onClick={() => router.push(item.href)}
+                                    className={`flex flex-col items-center gap-1 px-3 py-2 rounded-xl ${isActive
+                                            ? 'text-blue-600'
+                                            : 'text-gray-500'
+                                        }`}
+                                >
+                                    <div className={`${isActive ? 'scale-110' : ''}`}>
+                                        {item.icon}
+                                    </div>
+                                    <span className={`text-xs font-medium ${isActive ? 'text-blue-600' : 'text-gray-600'}`}>
+                                        {item.name}
+                                    </span>
+                                </button>
+                            );
+                        })}
                 </div>
             </nav>
 

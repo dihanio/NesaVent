@@ -33,6 +33,27 @@ const createPayment = async (req, res) => {
       return res.status(403).json({ message: 'Tidak memiliki akses ke order ini' });
     }
 
+    // HANDLE TIKET GRATIS (totalHarga = 0)
+    if (order.totalHarga === 0) {
+      console.log('Processing free ticket order:', orderId);
+      
+      // Update order status langsung ke paid
+      order.status = 'paid';
+      order.paidAt = Date.now();
+      order.paymentMethod = 'free';
+      await order.save();
+
+      // Generate tickets langsung
+      await generateTicketsAndNotify(order);
+
+      return res.json({
+        success: true,
+        message: 'Tiket gratis berhasil diklaim',
+        orderId: order._id,
+        isFree: true
+      });
+    }
+
     console.log('Order data:', {
       _id: order._id,
       totalHarga: order.totalHarga,
@@ -51,22 +72,34 @@ const createPayment = async (req, res) => {
         console.log('Processing items structure...');
         itemDetails = order.items.map((item, index) => {
           console.log(`Item ${index}:`, item);
+          // Truncate name to 50 chars (Midtrans limit)
+          let itemName = `${order.event.nama} - ${item.namaTipe || 'Tiket'}`;
+          if (itemName.length > 50) {
+            itemName = itemName.substring(0, 47) + '...';
+          }
+          
           return {
             id: item.tipeTiket ? item.tipeTiket.toString() : `item-${index}`,
-            price: Math.floor(item.hargaSatuan || 0), // Pastikan integer
-            quantity: item.jumlah || 1,
-            name: `${order.event.nama} - ${item.namaTipe || 'Tiket'}`,
+            price: parseInt(item.hargaSatuan || 0), // Pastikan integer
+            quantity: parseInt(item.jumlah || 1),
+            name: itemName,
           };
         });
       } else if (order.jumlahTiket && order.totalHarga) {
         // Legacy structure: single ticket type
         console.log('Processing legacy structure...');
         const hargaSatuan = Math.floor(order.totalHarga / order.jumlahTiket);
+        // Truncate name to 50 chars (Midtrans limit)
+        let eventName = order.event.nama;
+        if (eventName.length > 50) {
+          eventName = eventName.substring(0, 47) + '...';
+        }
+        
         itemDetails = [{
           id: order.event._id.toString(),
           price: hargaSatuan,
           quantity: order.jumlahTiket,
-          name: order.event.nama,
+          name: eventName,
         }];
       } else {
         // Fallback jika data tidak lengkap
@@ -80,29 +113,33 @@ const createPayment = async (req, res) => {
 
     // Validasi gross_amount = sum of items
     const calculatedTotal = itemDetails.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const grossAmount = Math.floor(order.totalHarga);
+    const grossAmount = parseInt(order.totalHarga);
     
     console.log('Payment validation:', {
       orderTotal: order.totalHarga,
       grossAmount,
       calculatedFromItems: calculatedTotal,
+      diff: grossAmount - calculatedTotal,
       match: grossAmount === calculatedTotal
     });
 
-    // Adjust jika ada selisih pembulatan
+    // Adjust jika ada selisih pembulatan - HARUS tepat untuk Midtrans
     if (grossAmount !== calculatedTotal) {
       const diff = grossAmount - calculatedTotal;
-      if (Math.abs(diff) <= itemDetails.length) {
-        // Adjust item pertama
-        itemDetails[0].price += diff;
-        console.log(`Adjusted item price by ${diff} to match gross_amount`);
-      } else {
-        console.error('Gross amount mismatch:', { grossAmount, calculatedTotal, diff });
+      // Adjust item pertama untuk memastikan total match
+      itemDetails[0].price += diff;
+      console.log(`⚠️ Adjusted item[0] price by ${diff} to match gross_amount (${itemDetails[0].price - diff} -> ${itemDetails[0].price})`);
+      
+      // Verify lagi setelah adjustment
+      const newTotal = itemDetails.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      if (newTotal !== grossAmount) {
+        console.error('❌ Failed to adjust prices:', { grossAmount, newTotal, diff: grossAmount - newTotal });
         return res.status(400).json({ 
           message: 'Terjadi kesalahan perhitungan total harga',
-          details: { expected: grossAmount, calculated: calculatedTotal }
+          details: { expected: grossAmount, calculated: newTotal }
         });
       }
+      console.log('✓ Price adjustment successful, totals match');
     }
 
     // Generate unique order_id dengan timestamp
@@ -301,7 +338,54 @@ const releaseReservedStock = async (order) => {
   }
 };
 
+// @desc    Simulate payment success (DEVELOPMENT ONLY)
+// @route   POST /api/payment/simulate/:orderId
+// @access  Private
+const simulatePayment = async (req, res) => {
+  // Only allow in development
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({ message: 'Not allowed in production' });
+  }
+
+  try {
+    const order = await Order.findById(req.params.orderId)
+      .populate('event')
+      .populate('user');
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order tidak ditemukan' });
+    }
+
+    if (order.status === 'paid') {
+      return res.status(400).json({ message: 'Order sudah dibayar' });
+    }
+
+    console.log('🧪 SIMULATING PAYMENT SUCCESS for order:', order._id);
+
+    // Update order status
+    order.status = 'paid';
+    order.paidAt = Date.now();
+    order.transactionId = `SIMULATED-${Date.now()}`;
+    await order.save();
+
+    // Generate tickets
+    await generateTicketsAndNotify(order);
+
+    console.log('✅ Payment simulation completed');
+
+    res.json({ 
+      success: true,
+      message: 'Pembayaran berhasil disimulasikan',
+      orderId: order._id 
+    });
+  } catch (error) {
+    console.error('Error simulating payment:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createPayment,
   handleNotification,
+  simulatePayment,
 };

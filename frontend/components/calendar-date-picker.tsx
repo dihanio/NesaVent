@@ -625,14 +625,12 @@ export const CalendarDatePicker = React.forwardRef<
           {isPopoverOpen && (
             <PopoverContent
               className="w-auto bg-white border-2 border-gray-200 rounded-2xl shadow-xl p-6"
-              align="center"
-              avoidCollisions={false}
+              align="start"
+              side="bottom"
+              sideOffset={8}
+              avoidCollisions={true}
               onInteractOutside={handleClose}
               onEscapeKeyDown={handleClose}
-              style={{
-                maxHeight: "var(--radix-popover-content-available-height)",
-                overflowY: "auto",
-              }}
             >
               <div className="flex">
                 {numberOfMonths === 2 && (
@@ -781,7 +779,7 @@ export const CalendarDatePicker = React.forwardRef<
                             </div>
                           )}
                         </div>
-                        <div className="flex">
+                        <div className="flex min-h-80">
                           <Calendar
                             mode="range"
                             defaultMonth={monthFrom}
@@ -792,7 +790,7 @@ export const CalendarDatePicker = React.forwardRef<
                             numberOfMonths={numberOfMonths}
                             showOutsideDays={false}
                             disabled={isDateDisabled}
-                            className={className}
+                            className={cn(className, "[--cell-size:3rem] text-base")}
                           />
                         </div>
                       </div>
@@ -917,7 +915,7 @@ export const CalendarDatePicker = React.forwardRef<
                               </div>
                             )}
                           </div>
-                          <div className="flex">
+                          <div className="flex min-h-80">
                             <Calendar
                               mode="range"
                               defaultMonth={monthFrom}
@@ -928,7 +926,7 @@ export const CalendarDatePicker = React.forwardRef<
                               numberOfMonths={numberOfMonths}
                               showOutsideDays={false}
                               disabled={isDateDisabled}
-                              className={className}
+                              className={cn(className, "[--cell-size:3rem] text-base")}
                             />
                           </div>
                         </div>

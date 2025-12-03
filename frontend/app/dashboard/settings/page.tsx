@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { authService } from '@/lib/auth';
 import DashboardLayout from '@/components/DashboardLayout';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 
 interface BankAccount {
   _id: string;

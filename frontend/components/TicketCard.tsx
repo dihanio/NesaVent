@@ -9,6 +9,7 @@ interface Ticket {
   event: {
     _id: string;
     nama: string;
+    slug?: string;
     tanggal: string;
     waktu: string;
     lokasi: string;
@@ -168,10 +169,10 @@ export default function TicketCard({ ticket }: TicketCardProps) {
             Cetak Tiket
           </button>
           <Link
-            href={`/tickets/${ticket._id}`}
+            href={`/dashboard/tickets/${ticket._id}`}
             className="flex-1 bg-gray-200 text-gray-800 py-2 rounded-lg hover:bg-gray-300 transition text-center"
           >
-            Detail
+            Detail Tiket
           </Link>
         </div>
       </div>

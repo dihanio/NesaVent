@@ -190,6 +190,11 @@ const updateProfile = async (req, res) => {
       user.organisasi = organisasi !== undefined ? organisasi : user.organisasi;
     }
 
+    // Handle cover image upload for mitra
+    if (req.file && req.file.fieldname === 'coverImage') {
+      user.coverImage = req.file.filename;
+    }
+
     // Update student fields if user is mahasiswa
     if (user.role === 'user' || user.role === 'mahasiswa') {
       // Prevent updating student data if already approved
@@ -202,7 +207,7 @@ const updateProfile = async (req, res) => {
       user.fakultas = fakultas !== undefined ? fakultas : user.fakultas;
 
       // Handle KTM file upload
-      if (req.file) {
+      if (req.file && req.file.fieldname === 'ktm') {
         user.ktm = req.file.filename;
       }
 
@@ -221,6 +226,8 @@ const updateProfile = async (req, res) => {
       email: updatedUser.email,
       nomorTelepon: updatedUser.nomorTelepon,
       role: updatedUser.role,
+      avatar: updatedUser.avatar,
+      coverImage: updatedUser.coverImage,
       organisasi: updatedUser.organisasi,
       nim: updatedUser.nim,
       programStudi: updatedUser.programStudi,

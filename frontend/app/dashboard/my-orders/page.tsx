@@ -103,6 +103,23 @@ export default function MyOrdersPage() {
     }
   };
 
+  // Development only: Simulate payment
+  const handleSimulatePayment = async (orderId: string) => {
+    if (!confirm('🧪 DEVELOPMENT: Simulasi pembayaran berhasil?')) {
+      return;
+    }
+
+    try {
+      const response = await api.post(`/payment/simulate/${orderId}`);
+      alert('✅ Pembayaran berhasil disimulasikan! Tiket sudah dibuat.');
+      fetchOrders();
+      router.push('/dashboard/my-tickets');
+    } catch (error: any) {
+      console.error('Error simulating payment:', error);
+      alert(error.response?.data?.message || 'Gagal simulasi pembayaran');
+    }
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -291,6 +308,13 @@ export default function MyOrdersPage() {
                                   Bayar
                                 </button>
                                 <button
+                                  onClick={() => handleSimulatePayment(order._id)}
+                                  className="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
+                                  title="Development: Simulasi pembayaran berhasil"
+                                >
+                                  🧪 Simulasi
+                                </button>
+                                <button
                                   onClick={() => handleCancelOrder(order._id)}
                                   className="px-3 py-1 border border-red-300 text-red-600 text-sm rounded-lg hover:bg-red-50 transition"
                                 >
@@ -388,6 +412,13 @@ export default function MyOrdersPage() {
                               className="flex-1 min-w-0 px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition"
                             >
                               Bayar
+                            </button>
+                            <button
+                              onClick={() => handleSimulatePayment(order._id)}
+                              className="px-3 py-2 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition"
+                              title="Development: Simulasi pembayaran"
+                            >
+                              🧪
                             </button>
                             <button
                               onClick={() => handleCancelOrder(order._id)}

@@ -94,6 +94,30 @@ const createOrder = async (req, res) => {
           return res.status(400).json({ message: `Stok tiket ${ticketType.nama} tidak mencukupi` });
         }
 
+        // VALIDASI KHUSUS: Tiket gratis dibatasi 1 per orang
+        if (ticketType.harga === 0) {
+          if (quantity > 1) {
+            return res.status(400).json({ 
+              message: `Tiket gratis hanya dapat dibeli 1 tiket per orang` 
+            });
+          }
+
+          // Cek apakah user sudah pernah membeli tiket gratis untuk event ini
+          const existingFreeTickets = await Order.find({
+            user: req.user._id,
+            event: eventId,
+            'items.tipeTiket': ticketTypeId,
+            'items.hargaSatuan': 0,
+            status: { $in: ['pending', 'paid'] }
+          });
+
+          if (existingFreeTickets.length > 0) {
+            return res.status(400).json({
+              message: `Anda sudah mendapatkan tiket gratis untuk event ini. Tiket gratis hanya dapat diambil 1 kali per orang.`
+            });
+          }
+        }
+
         // Cek maksimal pembelian per orang (untuk semua role)
         if (ticketType.maxPembelianPerOrang) {
           const existingOrders = await Order.find({
@@ -208,6 +232,30 @@ const createOrder = async (req, res) => {
         // Cek stok tiket tipe ini
         if (ticketType.stokTersisa < jumlahTiket) {
           return res.status(400).json({ message: 'Stok tiket tidak mencukupi' });
+        }
+
+        // VALIDASI KHUSUS: Tiket gratis dibatasi 1 per orang
+        if (ticketType.harga === 0) {
+          if (jumlahTiket > 1) {
+            return res.status(400).json({ 
+              message: `Tiket gratis hanya dapat dibeli 1 tiket per orang` 
+            });
+          }
+
+          // Cek apakah user sudah pernah membeli tiket gratis untuk event ini
+          const existingFreeTickets = await Order.find({
+            user: req.user._id,
+            event: eventId,
+            'items.tipeTiket': ticketTypeId,
+            'items.hargaSatuan': 0,
+            status: { $in: ['pending', 'paid'] }
+          });
+
+          if (existingFreeTickets.length > 0) {
+            return res.status(400).json({
+              message: `Anda sudah mendapatkan tiket gratis untuk event ini. Tiket gratis hanya dapat diambil 1 kali per orang.`
+            });
+          }
         }
 
         // Cek maksimal pembelian per orang

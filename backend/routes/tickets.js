@@ -26,6 +26,7 @@ router.get('/:id', protect, async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id)
       .populate('event')
+      .populate('order')
       .populate('user', 'nama email');
 
     if (ticket) {

@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '@/lib/auth';
+import { getErrorMessage, validatePasswordStrength, validateEmail } from '@/lib/validation';
+import { ErrorAlert } from '@/components/ui/alert';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -44,14 +46,27 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
 
-    // Validasi password
-    if (formData.password !== formData.confirmPassword) {
-      setError('Password dan konfirmasi password tidak cocok');
+    // Validasi nama
+    if (formData.nama.length < 3 || formData.nama.length > 100) {
+      setError('Nama harus 3-100 karakter');
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password minimal 6 karakter');
+    // Validasi email
+    if (!validateEmail(formData.email)) {
+      setError('Format email tidak valid');
+      return;
+    }
+
+    // Validasi password
+    const passwordValidation = validatePasswordStrength(formData.password);
+    if (!passwordValidation.isValid) {
+      setError(passwordValidation.message);
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Password dan konfirmasi password tidak cocok');
       return;
     }
 
@@ -63,10 +78,10 @@ export default function RegisterPage() {
       router.push('/');
       router.refresh();
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Registrasi gagal. Silakan coba lagi.';
+      const errorMessage = getErrorMessage(err);
 
       // Jika email sudah terdaftar, redirect ke login
-      if (errorMessage.includes('Email sudah terdaftar')) {
+      if (errorMessage.includes('Email sudah terdaftar') || errorMessage.includes('email already exists')) {
         alert('Email sudah terdaftar. Anda akan diarahkan ke halaman login.');
         router.push('/login');
         return;
@@ -109,11 +124,7 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                {error}
-              </div>
-            )}
+            <ErrorAlert error={error} className="mb-4" onClose={() => setError('')} />
 
             <form className="space-y-4" onSubmit={handleSubmit}>
               <div>
@@ -178,10 +189,13 @@ export default function RegisterPage() {
                   type="password"
                   required
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-lg placeholder-gray-400 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Minimal 6 karakter"
+                  placeholder="Minimal 8 karakter"
                   value={formData.password}
                   onChange={handleChange}
                 />
+                <p className="mt-1 text-xs text-gray-500">
+                  Password harus mengandung huruf besar, huruf kecil, angka, dan karakter spesial
+                </p>
               </div>
 
               <div>

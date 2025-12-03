@@ -215,7 +215,7 @@ export default function UserDashboardHome({
                                                 </span>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <Link href={`/orders/${order._id}`} className="text-blue-600 hover:text-blue-900">
+                                                <Link href={`/checkout/${order._id}`} className="text-blue-600 hover:text-blue-900">
                                                     Detail
                                                 </Link>
                                             </td>

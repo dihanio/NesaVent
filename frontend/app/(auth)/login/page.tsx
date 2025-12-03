@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { authService } from '@/lib/auth';
+import { getErrorMessage } from '@/lib/validation';
+import { ErrorAlert } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -42,7 +44,7 @@ export default function LoginPage() {
         // Redirect ke halaman verifikasi dengan membawa email
         router.push(`/verify-email?email=${formData.email}`);
       } else {
-        setError(err.response?.data?.message || 'Login gagal. Silakan coba lagi.');
+        setError(getErrorMessage(err));
       }
       setLoading(false);
     }
@@ -79,11 +81,7 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
-                {error}
-              </div>
-            )}
+            <ErrorAlert error={error} className="mb-4" onClose={() => setError('')} />
 
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div>

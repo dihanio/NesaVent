@@ -1,5 +1,9 @@
 const Notification = require('../models/Notification');
 
+// Batch notification queue
+let notificationQueue = [];
+let queueTimeout = null;
+
 // Helper function untuk create notification
 const createNotification = async (userId, type, title, message, relatedData = {}) => {
   try {
@@ -15,6 +19,53 @@ const createNotification = async (userId, type, title, message, relatedData = {}
     console.error('Error creating notification:', error);
     return null;
   }
+};
+
+// Batch create notifications (more efficient for multiple notifications)
+const batchCreateNotifications = async (notifications) => {
+  try {
+    if (notifications.length === 0) return [];
+    
+    const createdNotifications = await Notification.insertMany(notifications, { ordered: false });
+    return createdNotifications;
+  } catch (error) {
+    console.error('Error batch creating notifications:', error);
+    return [];
+  }
+};
+
+// Queue notification for batch processing
+const queueNotification = (userId, type, title, message, relatedData = {}) => {
+  notificationQueue.push({
+    user: userId,
+    type,
+    title,
+    message,
+    ...relatedData,
+    createdAt: new Date()
+  });
+  
+  // Process queue after 1 second or when queue reaches 10 items
+  if (notificationQueue.length >= 10) {
+    processNotificationQueue();
+  } else if (!queueTimeout) {
+    queueTimeout = setTimeout(processNotificationQueue, 1000);
+  }
+};
+
+// Process queued notifications
+const processNotificationQueue = async () => {
+  if (queueTimeout) {
+    clearTimeout(queueTimeout);
+    queueTimeout = null;
+  }
+  
+  if (notificationQueue.length === 0) return;
+  
+  const toProcess = [...notificationQueue];
+  notificationQueue = [];
+  
+  await batchCreateNotifications(toProcess);
 };
 
 // @desc    Get all notifications for user
@@ -132,6 +183,8 @@ const clearReadNotifications = async (req, res) => {
 
 module.exports = {
   createNotification,
+  queueNotification,
+  batchCreateNotifications,
   getNotifications,
   markAsRead,
   markAllAsRead,

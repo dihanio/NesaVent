@@ -9,10 +9,19 @@ const {
   updateOrderDetails,
 } = require('../controllers/orderController');
 const { protect, protectUser } = require('../middleware/auth');
+const { orderLimiter } = require('../utils/rateLimiter');
+const { validateOrderCreation, handleValidationErrors } = require('../utils/validators');
 
-router.route('/').get(protect, getAllOrders).post(protect, protectUser, createOrder);
-router.route('/my-orders').get(protect, getMyOrders);
-router.route('/:id').get(protect, getOrderById).put(protect, updateOrderDetails);
-router.route('/:id/pay').put(protect, updateOrderToPaid);
+// Order management routes
+router.get('/', protect, getAllOrders);
+router.get('/my-orders', protect, getMyOrders);
+router.get('/:id', protect, getOrderById);
+
+// Create order with rate limiting and validation
+router.post('/', protect, protectUser, orderLimiter, validateOrderCreation, handleValidationErrors, createOrder);
+
+// Update order
+router.put('/:id', protect, updateOrderDetails);
+router.put('/:id/pay', protect, updateOrderToPaid);
 
 module.exports = router;

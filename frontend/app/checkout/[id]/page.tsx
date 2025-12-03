@@ -120,16 +120,23 @@ export default function CheckoutPage() {
         nomorTelepon: formData.nomorTelepon,
       });
 
-      // Create payment transaction with Midtrans
+      // Create payment transaction
       const { data } = await api.post('/payment/create', {
         orderId: params.id
       });
 
-      // Open Midtrans Snap payment modal
+      // Handle tiket gratis (no payment needed)
+      if (data.isFree) {
+        console.log('Free ticket claimed successfully');
+        router.push('/dashboard/my-tickets?claimed=success');
+        return;
+      }
+
+      // Open Midtrans Snap payment modal for paid tickets
       (window as any).snap.pay(data.token, {
         onSuccess: function(result: any) {
           console.log('Payment success:', result);
-          router.push('/dashboard/my-orders?payment=success');
+          router.push('/dashboard/my-tickets?payment=success');
         },
         onPending: function(result: any) {
           console.log('Payment pending:', result);

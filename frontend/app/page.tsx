@@ -130,12 +130,6 @@ export default function Home() {
                 alt={`Slide ${index + 1}`}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent flex items-end p-8">
-                <div className="text-white">
-                  <h2 className="text-3xl md:text-5xl font-bold mb-2">Temukan Event Seru!</h2>
-                  <p className="text-lg opacity-90">Jelajahi ribuan event menarik di sekitarmu</p>
-                </div>
-              </div>
             </div>
           ))}
 

@@ -158,6 +158,15 @@ eventSchema.virtual('totalStokTersisa').get(function () {
   return this.stok || 0;
 });
 
+// Indexes for query optimization
+eventSchema.index({ slug: 1 });
+eventSchema.index({ status: 1, tanggal: 1 });
+eventSchema.index({ kategori: 1, status: 1 });
+eventSchema.index({ createdBy: 1, status: 1 });
+eventSchema.index({ nama: 'text', lokasi: 'text' }); // Full-text search
+eventSchema.index({ views: -1 }); // Popular events
+eventSchema.index({ createdAt: -1 }); // Newest events
+
 eventSchema.set('toJSON', { virtuals: true });
 eventSchema.set('toObject', { virtuals: true });
 

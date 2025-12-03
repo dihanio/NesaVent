@@ -8,6 +8,8 @@ interface TicketType {
   stok: number;
   stokTersisa: number;
   deskripsi?: string;
+  mulaiJual?: string | Date;
+  akhirJual?: string | Date;
 }
 
 interface Event {
@@ -32,19 +34,47 @@ interface EventCardProps {
 }
 
 export default function EventCard({ event }: EventCardProps) {
-  // Get minimum price from ticket types
+  // Check if ticket is currently on sale based on mulaiJual and akhirJual
+  const isTicketOnSale = (ticket: TicketType) => {
+    const now = new Date();
+    const mulaiJual = ticket.mulaiJual ? new Date(ticket.mulaiJual) : null;
+    const akhirJual = ticket.akhirJual ? new Date(ticket.akhirJual) : null;
+    
+    // Check if sale period has started
+    if (mulaiJual && now < mulaiJual) return false;
+    
+    // Check if sale period has ended
+    if (akhirJual && now > akhirJual) return false;
+    
+    return true;
+  };
+
+  // Get minimum price from ticket types (only from available and on-sale tickets)
   const getMinPrice = () => {
     if (event.tiketTersedia && event.tiketTersedia.length > 0) {
-      const prices = event.tiketTersedia.map(t => t.harga).filter(p => p > 0);
-      return prices.length > 0 ? Math.min(...prices) : 0;
+      // Filter only tickets with available stock AND currently on sale
+      const availableTickets = event.tiketTersedia.filter(t => 
+        t.stokTersisa > 0 && isTicketOnSale(t)
+      );
+      
+      if (availableTickets.length > 0) {
+        const prices = availableTickets.map(t => t.harga || 0);
+        return Math.min(...prices);
+      }
+      
+      // If no tickets available, return 0
+      return 0;
     }
     return event.harga || 0;
   };
 
-  // Get total available stock
+  // Get total available stock (only from on-sale tickets)
   const getTotalStok = () => {
     if (event.tiketTersedia && event.tiketTersedia.length > 0) {
-      return event.tiketTersedia.reduce((total, t) => total + t.stokTersisa, 0);
+      // Only count stock from tickets that are currently on sale
+      return event.tiketTersedia
+        .filter(t => isTicketOnSale(t))
+        .reduce((total, t) => total + t.stokTersisa, 0);
     }
     return event.totalStokTersisa || event.stok || 0;
   };

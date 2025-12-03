@@ -90,6 +90,12 @@ orderSchema.virtual('totalJumlahTiket').get(function() {
   return this.jumlahTiket || 0;
 });
 
+// Indexes for query optimization
+orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ event: 1, status: 1 });
+orderSchema.index({ status: 1, createdAt: 1 }); // For expiry job
+orderSchema.index({ transactionId: 1 });
+
 orderSchema.set('toJSON', { virtuals: true });
 orderSchema.set('toObject', { virtuals: true });
 
