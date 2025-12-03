@@ -20,6 +20,11 @@ const ticketTypeSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  stokPending: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   deskripsi: {
     type: String,
     default: ''

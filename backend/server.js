@@ -2,12 +2,16 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const { initializeOrderExpiryJob } = require('./utils/orderExpiry');
 
 // Load environment variables
 dotenv.config();
 
 // Koneksi ke database
 connectDB();
+
+// Initialize cron jobs
+initializeOrderExpiryJob();
 
 // Initialize Express
 const app = express();

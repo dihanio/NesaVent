@@ -1,5 +1,8 @@
 const midtransClient = require('midtrans-client');
 const Order = require('../models/Order');
+const Event = require('../models/Event');
+const Ticket = require('../models/Ticket');
+const { createNotification } = require('./notificationController');
 
 // Initialize Midtrans Snap
 const snap = new midtransClient.Snap({
@@ -185,29 +188,116 @@ const handleNotification = async (req, res) => {
         order.status = 'paid';
         order.paidAt = Date.now();
         order.transactionId = statusResponse.transaction_id;
+        await order.save();
+        
+        // Generate tickets and send notification
+        await generateTicketsAndNotify(order);
       }
     } else if (transactionStatus == 'settlement') {
       order.status = 'paid';
       order.paidAt = Date.now();
       order.transactionId = statusResponse.transaction_id;
+      await order.save();
+      
+      // Generate tickets and send notification
+      await generateTicketsAndNotify(order);
     } else if (
       transactionStatus == 'cancel' ||
       transactionStatus == 'deny' ||
       transactionStatus == 'expire'
     ) {
       order.status = 'cancelled';
+      await order.save();
+      
+      // Release reserved stock
+      await releaseReservedStock(order);
     } else if (transactionStatus == 'pending') {
       order.status = 'pending';
+      await order.save();
     }
-
-    await order.save();
-
-    // Jika paid, generate tiket (akan dihandle di frontend atau bisa juga di sini)
 
     res.json({ message: 'Notifikasi berhasil diproses' });
   } catch (error) {
     console.error('Error handling notification:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// Helper function to generate tickets and send notifications
+const generateTicketsAndNotify = async (order) => {
+  try {
+    // Populate order data
+    await order.populate('event user');
+    
+    const event = order.event;
+    
+    // Confirm stock reduction (convert pending to confirmed)
+    if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        const ticketType = event.tiketTersedia.id(item.tipeTiket);
+        if (ticketType) {
+          ticketType.stokPending = Math.max(0, (ticketType.stokPending || 0) - item.jumlah);
+        }
+      }
+      await event.save();
+    }
+    
+    // Generate tickets
+    const totalTiket = order.items && order.items.length > 0
+      ? order.items.reduce((sum, item) => sum + item.jumlah, 0)
+      : order.jumlahTiket;
+    
+    const tickets = [];
+    for (let i = 0; i < totalTiket; i++) {
+      const kodeTicket = `TIX-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+      const qrCode = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${kodeTicket}`;
+      
+      const ticket = await Ticket.create({
+        order: order._id,
+        user: order.user._id,
+        event: order.event._id,
+        kodeTicket,
+        qrCode,
+        namaPemilik: order.namaPembeli,
+      });
+      
+      tickets.push(ticket);
+    }
+    
+    // Create notification for event owner (mitra)
+    await createNotification(
+      event.createdBy,
+      'new_order',
+      '🎫 Pembelian Tiket Baru!',
+      `${order.namaPembeli} membeli ${totalTiket} tiket untuk event "${event.nama}". Total: Rp ${order.totalHarga.toLocaleString('id-ID')}`,
+      { relatedOrder: order._id, relatedEvent: event._id }
+    );
+    
+    console.log(`Generated ${tickets.length} tickets for order ${order._id}`);
+  } catch (error) {
+    console.error('Error generating tickets:', error);
+    // Don't throw - we don't want to fail the webhook
+  }
+};
+
+// Helper function to release reserved stock when payment fails/cancelled
+const releaseReservedStock = async (order) => {
+  try {
+    const event = await Event.findById(order.event);
+    
+    if (order.items && order.items.length > 0) {
+      for (const item of order.items) {
+        const ticketType = event.tiketTersedia.id(item.tipeTiket);
+        if (ticketType) {
+          ticketType.stokTersisa += item.jumlah; // Return stock
+          ticketType.stokPending = Math.max(0, (ticketType.stokPending || 0) - item.jumlah); // Remove from pending
+        }
+      }
+      await event.save();
+      console.log(`Released stock for cancelled order ${order._id}`);
+    }
+  } catch (error) {
+    console.error('Error releasing stock:', error);
   }
 };
 

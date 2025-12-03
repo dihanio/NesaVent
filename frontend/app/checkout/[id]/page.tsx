@@ -120,18 +120,35 @@ export default function CheckoutPage() {
         nomorTelepon: formData.nomorTelepon,
       });
 
-      // Proceed to payment
-      // For now, just mark as paid (in real implementation, this would integrate with payment gateway)
-      const paymentResponse = await api.put(`/orders/${params.id}/pay`, {
-        transactionId: `TXN-${Date.now()}`,
+      // Create payment transaction with Midtrans
+      const { data } = await api.post('/payment/create', {
+        orderId: params.id
       });
 
-      router.push(`/dashboard/my-orders`);
+      // Open Midtrans Snap payment modal
+      (window as any).snap.pay(data.token, {
+        onSuccess: function(result: any) {
+          console.log('Payment success:', result);
+          router.push('/dashboard/my-orders?payment=success');
+        },
+        onPending: function(result: any) {
+          console.log('Payment pending:', result);
+          router.push('/dashboard/my-orders?payment=pending');
+        },
+        onError: function(result: any) {
+          console.error('Payment error:', result);
+          setError('Pembayaran gagal. Silakan coba lagi.');
+          setSubmitting(false);
+        },
+        onClose: function() {
+          console.log('Payment modal closed');
+          setSubmitting(false);
+        }
+      });
     } catch (err: unknown) {
       console.error('Error during checkout:', err);
       const error = err as { response?: { data?: { message?: string } } };
       setError(error.response?.data?.message || 'Terjadi kesalahan. Silakan coba lagi.');
-    } finally {
       setSubmitting(false);
     }
   };
@@ -272,12 +289,12 @@ export default function CheckoutPage() {
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h4 className="font-semibold text-blue-900 mb-2">Pembayaran</h4>
+                <h4 className="font-semibold text-blue-900 mb-2">💳 Metode Pembayaran</h4>
                 <p className="text-sm text-blue-700 mb-3">
-                  Untuk demonstrasi, sistem akan otomatis memproses pembayaran setelah Anda mengisi data pembeli.
+                  Setelah mengisi data pembeli, Anda akan diarahkan ke halaman pembayaran Midtrans untuk menyelesaikan transaksi.
                 </p>
                 <p className="text-xs text-blue-600">
-                  Dalam implementasi nyata, di sini akan ada integrasi dengan gateway pembayaran seperti Midtrans.
+                  Pembayaran tersedia melalui: Transfer Bank, E-Wallet (GoPay, OVO, DANA), Kartu Kredit/Debit, dan Indomaret/Alfamart.
                 </p>
               </div>
 
